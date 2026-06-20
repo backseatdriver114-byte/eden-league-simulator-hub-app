@@ -238,19 +238,19 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
 
         {error && <div className="rounded-lg border-l-4 border-highlight-red bg-card px-3 py-2 text-sm">{error}</div>}
 
-        {!questions && loading && (
+        {!currentQuestion && loading && (
           <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            The press corps is gathering questions…
+            {exchanges.length === 0 ? "The press corps is gathering questions…" : "The next reporter is raising their hand…"}
           </div>
         )}
 
-        {questions && (
+        {currentQuestion && (
           <div className="space-y-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              Question {idx + 1} of {questions.length}
+              Question {idx + 1} of {TOTAL_QUESTIONS}
             </div>
             <div className="rounded-xl border bg-card p-4">
-              <p className="text-sm font-semibold leading-relaxed">{questions[idx]}</p>
+              <p className="text-sm font-semibold leading-relaxed">{currentQuestion}</p>
             </div>
             <textarea
               value={answer}
@@ -266,7 +266,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
                 Walk out
               </Button>
               <Button onClick={submit} disabled={loading || finishing || !answer.trim()} className="font-semibold">
-                {finishing ? "Filing recap…" : loading ? "Reading the room…" : (idx >= questions.length - 1 ? "Submit final answer" : "Submit answer")}
+                {finishing ? "Filing recap…" : loading ? "Reading the room…" : (idx >= TOTAL_QUESTIONS - 1 ? "Submit final answer" : "Submit answer")}
               </Button>
             </div>
           </div>
