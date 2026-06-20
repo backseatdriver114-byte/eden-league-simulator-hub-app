@@ -103,6 +103,32 @@ export function buildPressBrief({
       })()
     : "";
 
+  // Public press archive — quotes the manager has on the record, plus any
+  // recent quotes from rival managers (especially the opponent). Lets the
+  // press corps reference past statements ("Last week you said…").
+  const archive = state.pressArchive ?? [];
+  const ownQuotes = archive
+    .filter((e) => e.team === team)
+    .slice(-6)
+    .map((e) => `  - S${e.season}W${e.week} (${e.context}) ${e.managerName}: "${truncate(e.answer, 220)}" (re: "${truncate(e.question, 120)}")`)
+    .join("\n");
+  const rivalQuotes = archive
+    .filter((e) => e.team !== team)
+    .filter((e) => {
+      // Keep quotes that mention this team / its players / its manager, plus
+      // anything the opponent said.
+      if (opponent && e.team === opponent) return true;
+      const ts = e.targets ?? [];
+      return ts.some((t) =>
+        (t.kind === "team" && t.name === team) ||
+        (t.kind === "player" && t.team === team) ||
+        (t.kind === "manager" && t.team === team),
+      );
+    })
+    .slice(-6)
+    .map((e) => `  - S${e.season}W${e.week} ${e.managerName} (${e.team}): "${truncate(e.answer, 220)}"`)
+    .join("\n");
+
   return [
     `SEASON ${state.season}, WEEK ${state.currentWeek}.`,
     `${team} — tactical style "${t.tactical_style}", morale ${t.morale.toFixed(0)}/100.`,
@@ -122,5 +148,15 @@ export function buildPressBrief({
     lowMorale ? `\nLOW-MORALE PLAYERS:\n${lowMorale}` : "",
     expiring ? `\nCONTRACT EXPIRING NEXT:\n${expiring}` : "",
     opponentBlock,
+    ownQuotes ? `\nRECENT PRESS QUOTES FROM ${managerNameFor(state, team)} (use to follow up on prior statements):\n${ownQuotes}` : "",
+    rivalQuotes ? `\nRELEVANT PRESS QUOTES FROM RIVAL MANAGERS (about ${team}, its players, or the opponent — use to surface tension):\n${rivalQuotes}` : "",
   ].filter(Boolean).join("\n");
+}
+
+function truncate(s: string, n: number): string {
+  const flat = (s ?? "").replace(/\s+/g, " ").trim();
+  return flat.length > n ? `${flat.slice(0, n - 1)}…` : flat;
+}
+function managerNameFor(state: LeagueState, team: string): string {
+  return state.managers?.[team]?.name ?? "the manager";
 }

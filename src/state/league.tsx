@@ -162,6 +162,24 @@ export interface LeagueState {
   // Single relationship per AI manager, shared across all user clubs (since
   // the user is one person in real life).
   relations?: Record<string, number>;
+  // Public press conference archive. Every Q/A from every press conference
+  // is recorded here so AI features (future press questions, news articles,
+  // DM replies) can reference what the manager actually said on the record.
+  pressArchive?: PressArchiveEntry[];
+}
+
+export interface PressArchiveEntry {
+  id: string;
+  season: number;
+  week: number;
+  team: string;          // club holding the conference
+  managerName: string;   // speaker
+  context: "general" | "pre" | "post";
+  question: string;
+  answer: string;
+  summary?: string;      // AI-scored one-clause headline (optional)
+  targets?: { kind: "team" | "player" | "manager"; team?: string; name?: string }[];
+  createdAt: string;     // ISO timestamp
 }
 
 export interface StandingRow {
@@ -543,6 +561,7 @@ function normalize(state: LeagueState): LeagueState {
     ...state,
     season: state.season ?? 1,
     tradeProposals: state.tradeProposals ?? [],
+    pressArchive: state.pressArchive ?? [],
     payloads: state.payloads ?? {},
     undoStack: state.undoStack ?? [],
     redoStack: state.redoStack ?? [],
@@ -986,6 +1005,7 @@ interface LeagueContextValue {
   applyManagerHarshnessSample: (team: string, sample: number) => void;
   applyPlayerMoraleDelta: (team: string, playerName: string, delta: number) => void;
   applyTeamMoraleDelta: (team: string, delta: number) => void;
+  appendPressEntry: (entry: Omit<PressArchiveEntry, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
   standings: StandingRow[];
   leaderboards: Leaderboards;
 }
@@ -2118,6 +2138,29 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         const t = prev.teams[team];
         if (!t) return prev;
         return { ...prev, teams: { ...prev.teams, [team]: { ...t, morale: clampMorale(t.morale + delta) } } };
+      }),
+    appendPressEntry: (entry) =>
+      update((prev) => {
+        const full: PressArchiveEntry = {
+          id: entry.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `press-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+          createdAt: entry.createdAt ?? new Date().toISOString(),
+          season: entry.season,
+          week: entry.week,
+          team: entry.team,
+          managerName: entry.managerName,
+          context: entry.context,
+          question: entry.question,
+          answer: entry.answer,
+          summary: entry.summary,
+          targets: entry.targets,
+        };
+        // Cap the archive at the most recent 500 entries — plenty for AI
+        // grounding without bloating the persisted league row.
+        const prevArchive = prev.pressArchive ?? [];
+        const nextArchive = [...prevArchive, full].slice(-500);
+        return { ...prev, pressArchive: nextArchive };
       }),
   };
 

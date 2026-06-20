@@ -35,7 +35,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
   const {
     state, standings, leaderboards,
     applyPlayerMoraleDelta, applyTeamMoraleDelta, applyRelationDelta,
-    applyManagerRespectDelta, applyManagerHarshnessSample,
+    applyManagerRespectDelta, applyManagerHarshnessSample, appendPressEntry,
   } = useLeague();
   const askQs = useServerFn(generatePressQuestions);
   const scoreA = useServerFn(scorePressAnswer);
@@ -144,6 +144,27 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
       });
       applyManagerRespectDelta(team, res.respectDelta);
       applyManagerHarshnessSample(team, res.harshness);
+      // Always record this exchange to the public press archive — every
+      // press answer is on the record, even when the AI scored no specific
+      // morale/relation targets. Future press questions, news articles, and
+      // DM replies can reference these quotes.
+      appendPressEntry({
+        season: state.season,
+        week: state.currentWeek,
+        team,
+        managerName,
+        context,
+        question: q,
+        answer: a,
+        summary: res.summary || undefined,
+        targets: res.targets.map((t) =>
+          t.kind === "team"
+            ? { kind: "team", name: t.name }
+            : t.kind === "player"
+              ? { kind: "player", team: t.team, name: t.name }
+              : { kind: "manager", team: t.team },
+        ),
+      });
       if (res.summary) toast(res.summary, { description: `Press effect logged.` });
       setExchanges((xs) => [...xs, { question: q, answer: a }]);
       setAnswer("");

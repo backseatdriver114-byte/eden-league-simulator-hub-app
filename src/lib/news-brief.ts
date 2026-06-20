@@ -92,12 +92,18 @@ export function buildLeagueContext(
     );
   }
 
+  const archive = state.pressArchive ?? [];
+  const recentPress = archive.slice(-14)
+    .map((e) => `  - S${e.season}W${e.week} ${e.context} — ${e.managerName} (${e.team}): "${(e.answer ?? "").replace(/\s+/g, " ").trim().slice(0, 240)}"`)
+    .join("\n");
+
   return [
     `LEAGUE-WIDE ANALYTICAL CONTEXT (season ${state.season}, week ${state.currentWeek}) — use this to reason about WHY results happen and to answer tactical / injury / schedule questions:`,
     ``,
     `HOW THE MATCH ENGINE WEIGHS THINGS (so you can analyse credibly): match outcomes are driven by per-player attributes on a 1-10 scale (finishing, pace, passing, vision, defending, tackling, stamina, strength, aerial, composure, work rate, positioning), the team's tactical style and whether it matches their favoured identity, fatigue over the match, momentum swings, and a blowout dampener that suppresses scoring once a side is well ahead. A higher squad strength and a tactical style that suits the personnel generally win out, but fatigue, injuries to key players, and tough run-ins can swing things.`,
     ``,
     blocks.join("\n\n"),
+    recentPress ? `\n\nRECENT PRESS CONFERENCE QUOTES (public, on the record — quote or paraphrase when relevant; you may build storylines around these):\n${recentPress}` : "",
   ].join("\n");
 }
 

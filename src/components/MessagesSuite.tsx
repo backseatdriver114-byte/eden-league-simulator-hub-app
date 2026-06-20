@@ -61,6 +61,39 @@ function briefForPlayerDm(p: LeaguePlayer, team: string, teamStanding: string): 
   ].join("\n");
 }
 
+// Pull recent press archive entries that this DM counterpart would
+// plausibly know about (everything they were named in, plus quotes the
+// user manager has spoken about the counterpart's team / players).
+function recentPressFor(
+  archive: { season: number; week: number; team: string; managerName: string; context: string; question: string; answer: string; targets?: { kind: string; team?: string; name?: string }[] }[] | undefined,
+  opts: { userTeam: string; counterpartKind: "manager" | "player"; counterpartTeam: string; counterpartName: string },
+): string {
+  if (!archive || archive.length === 0) return "";
+  const flat = (s: string) => s.replace(/\s+/g, " ").trim();
+  const matches = archive.filter((e) => {
+    // The counterpart heard everything from their own manager and about themselves.
+    if (opts.counterpartKind === "manager") {
+      if (e.team === opts.counterpartTeam) return true; // their own press
+      // User talked about their club / players / them as a manager.
+      const ts = e.targets ?? [];
+      return e.team === opts.userTeam && ts.some((t) =>
+        (t.kind === "team" && t.name === opts.counterpartTeam) ||
+        (t.kind === "player" && t.team === opts.counterpartTeam) ||
+        (t.kind === "manager" && t.team === opts.counterpartTeam),
+      );
+    }
+    // Player: their own manager's press + anything the user said about them by name.
+    if (e.team === opts.counterpartTeam) return true;
+    const ts = e.targets ?? [];
+    return ts.some((t) => t.kind === "player" && t.team === opts.counterpartTeam && t.name === opts.counterpartName);
+  }).slice(-6);
+  if (matches.length === 0) return "";
+  const lines = matches
+    .map((e) => `  - S${e.season}W${e.week} ${e.context} — ${e.managerName} (${e.team}): "${flat(e.answer).slice(0, 220)}"`)
+    .join("\n");
+  return `\nRELEVANT PUBLIC PRESS QUOTES (the counterpart has read/heard these; reference them if it fits):\n${lines}`;
+}
+
 export function MessagesSuite() {
   const {
     state, standings,
@@ -242,14 +275,16 @@ export function MessagesSuite() {
         const standingRow = standings.find((s) => s.team === contact.counterpartTeam);
         const record = standingRow ? `${standingRow.w}W ${standingRow.d}D ${standingRow.l}L (rank ${standingRow.rank})` : "no data";
         const payroll = ai ? `$${ai.players.reduce((s, p) => s + (p.salary ?? 0), 0).toFixed(0)}M` : "?";
-        brief = briefForManagerDm(contact.userTeam, contact.counterpartTeam, state.relations?.[contact.counterpartTeam], payroll, record);
+        brief = briefForManagerDm(contact.userTeam, contact.counterpartTeam, state.relations?.[contact.counterpartTeam], payroll, record)
+          + recentPressFor(state.pressArchive, { userTeam: contact.userTeam, counterpartKind: "manager", counterpartTeam: contact.counterpartTeam, counterpartName: contact.counterpartName });
         counterpartPersonality = state.managers?.[contact.counterpartTeam]?.personality;
       } else {
         const p = state.teams[contact.counterpartTeam]?.players.find((x) => x.name === contact.counterpartName);
         if (!p) throw new Error("Player no longer on roster");
         const standingRow = standings.find((s) => s.team === contact.counterpartTeam);
         const stand = standingRow ? `rank ${standingRow.rank}/${standings.length}` : "unranked";
-        brief = briefForPlayerDm(p, contact.counterpartTeam, stand);
+        brief = briefForPlayerDm(p, contact.counterpartTeam, stand)
+          + recentPressFor(state.pressArchive, { userTeam: contact.userTeam, counterpartKind: "player", counterpartTeam: contact.counterpartTeam, counterpartName: contact.counterpartName });
       }
       const history: DmTurn[] = rows.map((r) => ({ role: r.role, text: r.content }));
       const res = await sendFn({
@@ -348,13 +383,15 @@ export function MessagesSuite() {
             const standingRow = standings.find((s) => s.team === hit.contact.counterpartTeam);
             const record = standingRow ? `${standingRow.w}W ${standingRow.d}D ${standingRow.l}L (rank ${standingRow.rank})` : "no data";
             const payroll = ai ? `$${ai.players.reduce((s, p) => s + (p.salary ?? 0), 0).toFixed(0)}M` : "?";
-            brief = briefForManagerDm(hit.contact.userTeam, hit.contact.counterpartTeam, state.relations?.[hit.contact.counterpartTeam], payroll, record);
+            brief = briefForManagerDm(hit.contact.userTeam, hit.contact.counterpartTeam, state.relations?.[hit.contact.counterpartTeam], payroll, record)
+              + recentPressFor(state.pressArchive, { userTeam: hit.contact.userTeam, counterpartKind: "manager", counterpartTeam: hit.contact.counterpartTeam, counterpartName: hit.contact.counterpartName });
           } else {
             const pl = state.teams[hit.contact.counterpartTeam]?.players.find((x) => x.name === hit.contact.counterpartName);
             if (!pl) continue;
             const standingRow = standings.find((s) => s.team === hit.contact.counterpartTeam);
             const stand = standingRow ? `rank ${standingRow.rank}/${standings.length}` : "unranked";
-            brief = briefForPlayerDm(pl, hit.contact.counterpartTeam, stand);
+            brief = briefForPlayerDm(pl, hit.contact.counterpartTeam, stand)
+              + recentPressFor(state.pressArchive, { userTeam: hit.contact.userTeam, counterpartKind: "player", counterpartTeam: hit.contact.counterpartTeam, counterpartName: hit.contact.counterpartName });
           }
           // Load existing history for the thread so the opener feels in-context.
           const { data: existing } = await supabase
