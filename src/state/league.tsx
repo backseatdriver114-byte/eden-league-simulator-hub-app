@@ -561,6 +561,7 @@ function normalize(state: LeagueState): LeagueState {
     ...state,
     season: state.season ?? 1,
     tradeProposals: state.tradeProposals ?? [],
+    pressArchive: state.pressArchive ?? [],
     payloads: state.payloads ?? {},
     undoStack: state.undoStack ?? [],
     redoStack: state.redoStack ?? [],
