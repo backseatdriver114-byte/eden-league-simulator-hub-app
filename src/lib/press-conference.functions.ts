@@ -223,7 +223,11 @@ ABSOLUTE RULES:
 - Praise → positive deltas. Criticism / blame / dismissal → negative deltas. Neutral analysis → no target.
 - Insulting another manager personally → negative relationDelta with that manager's team. Public praise → positive.
 - Self-talk or generic banter has NO targets.
-- "respectDelta" is a tiny ±1 to ±3 reflecting how the press would judge this answer — measured (-1..+1), sharp & insightful (+1..+3), pure cheer or pure vitriol (-1..-3).
+- "respectDelta" is -8..+8 and reflects how the press judges THIS answer specifically. Use the full range:
+    * 0 = forgettable, ±1 = slightly off-key or slightly on-message,
+    * ±2..±3 = clearly sharp or clearly weak,
+    * ±4..±5 = standout — visionary leadership / damning gaffe,
+    * ±6..±8 = career-defining moment — RESERVE FOR EXTREMES: shameless self-promotion, throwing your own players under the bus, personally insulting a rival manager, blaming the referee for a loss, refusing to answer, profanity, a brilliant principled stand, an inspiring rally cry, or genuinely witty class. Do NOT cap at ±3 when the answer truly earns more.
 - "harshness" is 0..1 — 0 = sugary, 0.5 = balanced, 1 = scathing.
 
 OUTPUT FORMAT — JSON object exactly:
@@ -233,7 +237,7 @@ OUTPUT FORMAT — JSON object exactly:
     {"kind":"player","team":"<valid team>","name":"<valid player on that team>","moraleDelta":<int -25..25>},
     {"kind":"manager","team":"<valid team>","relationDelta":<int -15..15>}
   ],
-  "respectDelta": <number -3..3>,
+  "respectDelta": <number -8..8>,
   "harshness": <number 0..1>,
   "summary": "<one short clause, max 80 chars>"
 }
