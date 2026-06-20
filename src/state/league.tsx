@@ -2139,6 +2139,29 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         if (!t) return prev;
         return { ...prev, teams: { ...prev.teams, [team]: { ...t, morale: clampMorale(t.morale + delta) } } };
       }),
+    appendPressEntry: (entry) =>
+      update((prev) => {
+        const full: PressArchiveEntry = {
+          id: entry.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `press-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+          createdAt: entry.createdAt ?? new Date().toISOString(),
+          season: entry.season,
+          week: entry.week,
+          team: entry.team,
+          managerName: entry.managerName,
+          context: entry.context,
+          question: entry.question,
+          answer: entry.answer,
+          summary: entry.summary,
+          targets: entry.targets,
+        };
+        // Cap the archive at the most recent 500 entries — plenty for AI
+        // grounding without bloating the persisted league row.
+        const prevArchive = prev.pressArchive ?? [];
+        const nextArchive = [...prevArchive, full].slice(-500);
+        return { ...prev, pressArchive: nextArchive };
+      }),
   };
 
   return <LeagueContext.Provider value={value}>{children}</LeagueContext.Provider>;
