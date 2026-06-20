@@ -1005,6 +1005,7 @@ interface LeagueContextValue {
   applyManagerHarshnessSample: (team: string, sample: number) => void;
   applyPlayerMoraleDelta: (team: string, playerName: string, delta: number) => void;
   applyTeamMoraleDelta: (team: string, delta: number) => void;
+  appendPressEntry: (entry: Omit<PressArchiveEntry, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
   standings: StandingRow[];
   leaderboards: Leaderboards;
 }
