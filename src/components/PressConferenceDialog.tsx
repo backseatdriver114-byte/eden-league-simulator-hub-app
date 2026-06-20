@@ -122,12 +122,12 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
   }
 
   async function submit() {
-    if (!questions) return;
+    if (!currentQuestion) return;
     const a = answer.trim();
     if (!a || loading) return;
     setError(null);
     setLoading(true);
-    const q = questions[idx];
+    const q = currentQuestion;
     try {
       const brief = buildPressBrief({ state, standings, leaderboards, team, context, fixtureId }) ?? "";
       const validTeams = state.teamOrder;
@@ -145,8 +145,6 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
         },
       });
       applyTargets(res.targets);
-      // Record this exchange in every relevant DM thread so the mentioned
-      // managers and players have the exact quote available when they reply.
       const exemptTeams = state.settings?.contractExemptTeams ?? [];
       const isUserTeam = (tm: string) => exemptTeams.includes(tm);
       const aiManagerNameFor = (tm: string): string | null => {
@@ -162,10 +160,6 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
       });
       applyManagerRespectDelta(team, res.respectDelta);
       applyManagerHarshnessSample(team, res.harshness);
-      // Always record this exchange to the public press archive — every
-      // press answer is on the record, even when the AI scored no specific
-      // morale/relation targets. Future press questions, news articles, and
-      // DM replies can reference these quotes.
       appendPressEntry({
         season: state.season,
         week: state.currentWeek,
@@ -183,17 +177,26 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
               : { kind: "manager", team: t.team },
         ),
       });
-      if (res.summary) toast(res.summary, { description: `Press effect logged.` });
-      setExchanges((xs) => [...xs, { question: q, answer: a }]);
+      if (res.summary) {
+        const r = res.respectDelta;
+        const respectNote = r >= 4 ? ` Respect ${r >= 0 ? "+" : ""}${r} — big win.`
+          : r <= -4 ? ` Respect ${r} — that hurt.`
+          : r !== 0 ? ` Respect ${r >= 0 ? "+" : ""}${r}.`
+          : "";
+        toast(res.summary, { description: `Press effect logged.${respectNote}` });
+      }
+      const nextExchanges = [...exchanges, { question: q, answer: a }];
+      setExchanges(nextExchanges);
       setAnswer("");
-      const last = idx >= questions.length - 1;
+      setCurrentQuestion(null);
+      const last = idx >= TOTAL_QUESTIONS - 1;
       if (last) {
         setFinishing(true);
         try {
           const recap = await recapFn({
             data: {
               team, managerName, context, brief,
-              exchanges: [...exchanges, { question: q, answer: a }],
+              exchanges: nextExchanges,
             },
           });
           onRecap?.(recap.article);
@@ -205,6 +208,9 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
         }
       } else {
         setIdx((i) => i + 1);
+        // Fetch the next question, using the freshly-updated exchange list so
+        // the reporter can react to what was just said and avoid repeats.
+        void fetchQuestion(nextExchanges);
       }
     } catch (e) {
       setError(formatErr(e));
