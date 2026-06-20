@@ -42,6 +42,19 @@ interface QuestionsInput {
   count?: number;        // desired number of questions (3-5)
 }
 
+interface NextQuestionInput {
+  team: string;
+  managerName: string;
+  context: PressContext;
+  brief: string;
+  // What the press corps has already asked + how the manager answered, in
+  // order. Lets the next reporter follow up on the manager's exact words and
+  // avoid asking the same thing twice.
+  priorExchanges: { question: string; answer: string }[];
+  questionNumber: number; // 1-indexed position in the conference
+  totalQuestions: number; // planned total for this conference
+}
+
 interface ScoreInput {
   team: string;
   managerName: string;
@@ -144,6 +157,61 @@ export const generatePressQuestions = createServerFn({ method: "POST" })
     return { questions: cleaned };
   });
 
+// ---------------- 1b. Generate ONE follow-up question ----------------
+// Streams the conference one question at a time so each new question can
+// react to what the manager actually just said and so the press corps can
+// avoid asking anything the manager has already addressed in this conference
+// or in previous on-record press archives (which are included in the brief).
+const NEXT_QUESTION_RULES = `
+You are a single reporter at the Eden League press lectern. Ask ONE sharp, specific question for the manager, grounded ONLY in the DATA block (standings, recent results, key players, injuries, contracts, rivals, and the RECENT PRESS QUOTES archive included in the brief).
+
+ABSOLUTE RULES:
+- Never invent stats, players, clubs, scores, or league events not present in the DATA.
+- Do NOT repeat or paraphrase any question already asked in this conference (see PRIOR EXCHANGES below). Do NOT re-ask topics the manager has already answered on-record in the RECENT PRESS QUOTES archive within the brief — if a player's contract, an injury, a tactical change, or a feud has been discussed recently, MOVE ON unless brand-new information warrants a follow-up.
+- If the manager's previous answer in this conference contained a quotable claim, contradiction, taunt, or dodge, FOLLOW UP on it directly — quote or reference their exact words.
+- Vary the angle across the conference: form, tactics, a specific player, a rival, the next fixture, dressing-room mood.
+- One or two sentences, ending with a question mark. Address the manager naturally (you may use their name).
+- For PRE-MATCH context, lean into the upcoming opponent. For POST-MATCH, the result that just happened. For GENERAL, range across the season.
+
+OUTPUT FORMAT:
+- Respond with ONLY a JSON object: {"question": "<the question>"}. No prose, no markdown.
+`;
+
+export const generateNextPressQuestion = createServerFn({ method: "POST" })
+  .inputValidator((data: NextQuestionInput) => {
+    if (!data || typeof data.brief !== "string" || data.brief.trim().length === 0) {
+      throw new Error("Missing press brief");
+    }
+    return data;
+  })
+  .handler(async ({ data }): Promise<{ question: string }> => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("AI is not configured");
+    const prior = data.priorExchanges.length === 0
+      ? "(none — this is the opening question)"
+      : data.priorExchanges
+          .map((e, i) => `Q${i + 1}: ${e.question}\nA${i + 1}: ${e.answer}`)
+          .join("\n");
+    const user = [
+      `DATA (the only facts you may use):`,
+      ``,
+      data.brief,
+      ``,
+      `CONTEXT: ${data.context} press conference for ${data.team} (manager: ${data.managerName}).`,
+      `THIS IS QUESTION ${data.questionNumber} OF ${data.totalQuestions}.`,
+      ``,
+      `PRIOR EXCHANGES IN THIS CONFERENCE (do not repeat any topic already addressed):`,
+      prior,
+      ``,
+      `Ask the next question. JSON object only.`,
+    ].join("\n");
+    const content = await callGateway(apiKey, NEXT_QUESTION_RULES, user, 0.95);
+    const parsed = extractJson<{ question?: unknown }>(content);
+    const q = typeof parsed?.question === "string" ? parsed.question.trim() : "";
+    if (!q) throw new Error("AI returned no usable question");
+    return { question: q };
+  });
+
 // ---------------- 2. Score an answer ----------------
 const SCORE_RULES = `
 You are an analyst rating the on-record press-conference response of a club manager. Read their answer carefully and decide what real-world EFFECT it would have on team morale, individual player morale, and the manager's RELATIONSHIP with other clubs' managers — purely from the words said.
@@ -155,7 +223,11 @@ ABSOLUTE RULES:
 - Praise → positive deltas. Criticism / blame / dismissal → negative deltas. Neutral analysis → no target.
 - Insulting another manager personally → negative relationDelta with that manager's team. Public praise → positive.
 - Self-talk or generic banter has NO targets.
-- "respectDelta" is a tiny ±1 to ±3 reflecting how the press would judge this answer — measured (-1..+1), sharp & insightful (+1..+3), pure cheer or pure vitriol (-1..-3).
+- "respectDelta" is -8..+8 and reflects how the press judges THIS answer specifically. Use the full range:
+    * 0 = forgettable, ±1 = slightly off-key or slightly on-message,
+    * ±2..±3 = clearly sharp or clearly weak,
+    * ±4..±5 = standout — visionary leadership / damning gaffe,
+    * ±6..±8 = career-defining moment — RESERVE FOR EXTREMES: shameless self-promotion, throwing your own players under the bus, personally insulting a rival manager, blaming the referee for a loss, refusing to answer, profanity, a brilliant principled stand, an inspiring rally cry, or genuinely witty class. Do NOT cap at ±3 when the answer truly earns more.
 - "harshness" is 0..1 — 0 = sugary, 0.5 = balanced, 1 = scathing.
 
 OUTPUT FORMAT — JSON object exactly:
@@ -165,7 +237,7 @@ OUTPUT FORMAT — JSON object exactly:
     {"kind":"player","team":"<valid team>","name":"<valid player on that team>","moraleDelta":<int -25..25>},
     {"kind":"manager","team":"<valid team>","relationDelta":<int -15..15>}
   ],
-  "respectDelta": <number -3..3>,
+  "respectDelta": <number -8..8>,
   "harshness": <number 0..1>,
   "summary": "<one short clause, max 80 chars>"
 }
@@ -240,7 +312,7 @@ export const scorePressAnswer = createServerFn({ method: "POST" })
     }
     return {
       targets,
-      respectDelta: clampDelta(Number(parsed.respectDelta), 3),
+      respectDelta: clampDelta(Number(parsed.respectDelta), 8),
       harshness: clamp01(Number(parsed.harshness)),
       summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 120) : "",
     };

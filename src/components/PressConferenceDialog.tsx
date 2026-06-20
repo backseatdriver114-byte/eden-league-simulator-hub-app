@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useLeague } from "@/state/league";
 import { buildPressBrief, type PressContext } from "@/lib/press-brief";
 import {
-  generatePressQuestions, scorePressAnswer, writePressRecap, type PressTarget,
+  generateNextPressQuestion, scorePressAnswer, writePressRecap, type PressTarget,
 } from "@/lib/press-conference.functions";
 import { logPressTargets } from "@/lib/press-log";
 import { Button } from "@/components/ui/button";
@@ -37,12 +37,13 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
     applyPlayerMoraleDelta, applyTeamMoraleDelta, applyRelationDelta,
     applyManagerRespectDelta, applyManagerHarshnessSample, appendPressEntry,
   } = useLeague();
-  const askQs = useServerFn(generatePressQuestions);
+  const askNext = useServerFn(generateNextPressQuestion);
   const scoreA = useServerFn(scorePressAnswer);
   const recapFn = useServerFn(writePressRecap);
 
-  const [questions, setQuestions] = useState<string[] | null>(null);
-  const [idx, setIdx] = useState(0);
+  const TOTAL_QUESTIONS = 4;
+  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
+  const [idx, setIdx] = useState(0); // 0-indexed position of current question
   const [answer, setAnswer] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,20 +56,37 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
   const baseInfluence = state.settings?.pressInfluenceBaseline ?? 1;
   const mult = influenceMult(respect, baseInfluence);
 
-  // Load questions on open.
+  // Fetch a single question (the opening one when called on open, or the
+  // next follow-up after each answered exchange).
+  async function fetchQuestion(priorExchanges: Exchange[]) {
+    const brief = buildPressBrief({ state, standings, leaderboards, team, context, fixtureId });
+    if (!brief) { setError("Couldn't build a press brief for this team."); return; }
+    setLoading(true);
+    try {
+      const r = await askNext({
+        data: {
+          team, managerName, context, brief,
+          priorExchanges,
+          questionNumber: priorExchanges.length + 1,
+          totalQuestions: TOTAL_QUESTIONS,
+        },
+      });
+      setCurrentQuestion(r.question);
+    } catch (e) {
+      setError(formatErr(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Load first question on open.
   useEffect(() => {
     if (!open) return;
     const key = `${team}::${context}::${fixtureId ?? ""}::${state.currentWeek}`;
     if (startedRef.current === key) return;
     startedRef.current = key;
-    setQuestions(null); setIdx(0); setAnswer(""); setExchanges([]); setError(null);
-    const brief = buildPressBrief({ state, standings, leaderboards, team, context, fixtureId });
-    if (!brief) { setError("Couldn't build a press brief for this team."); return; }
-    setLoading(true);
-    askQs({ data: { team, managerName, context, brief, count: 4 } })
-      .then((r) => setQuestions(r.questions))
-      .catch((e) => setError(formatErr(e)))
-      .finally(() => setLoading(false));
+    setCurrentQuestion(null); setIdx(0); setAnswer(""); setExchanges([]); setError(null);
+    void fetchQuestion([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, team, context, fixtureId]);
 
@@ -104,12 +122,12 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
   }
 
   async function submit() {
-    if (!questions) return;
+    if (!currentQuestion) return;
     const a = answer.trim();
     if (!a || loading) return;
     setError(null);
     setLoading(true);
-    const q = questions[idx];
+    const q = currentQuestion;
     try {
       const brief = buildPressBrief({ state, standings, leaderboards, team, context, fixtureId }) ?? "";
       const validTeams = state.teamOrder;
@@ -127,8 +145,6 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
         },
       });
       applyTargets(res.targets);
-      // Record this exchange in every relevant DM thread so the mentioned
-      // managers and players have the exact quote available when they reply.
       const exemptTeams = state.settings?.contractExemptTeams ?? [];
       const isUserTeam = (tm: string) => exemptTeams.includes(tm);
       const aiManagerNameFor = (tm: string): string | null => {
@@ -144,10 +160,6 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
       });
       applyManagerRespectDelta(team, res.respectDelta);
       applyManagerHarshnessSample(team, res.harshness);
-      // Always record this exchange to the public press archive — every
-      // press answer is on the record, even when the AI scored no specific
-      // morale/relation targets. Future press questions, news articles, and
-      // DM replies can reference these quotes.
       appendPressEntry({
         season: state.season,
         week: state.currentWeek,
@@ -165,17 +177,26 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
               : { kind: "manager", team: t.team },
         ),
       });
-      if (res.summary) toast(res.summary, { description: `Press effect logged.` });
-      setExchanges((xs) => [...xs, { question: q, answer: a }]);
+      if (res.summary) {
+        const r = res.respectDelta;
+        const respectNote = r >= 4 ? ` Respect ${r >= 0 ? "+" : ""}${r} — big win.`
+          : r <= -4 ? ` Respect ${r} — that hurt.`
+          : r !== 0 ? ` Respect ${r >= 0 ? "+" : ""}${r}.`
+          : "";
+        toast(res.summary, { description: `Press effect logged.${respectNote}` });
+      }
+      const nextExchanges = [...exchanges, { question: q, answer: a }];
+      setExchanges(nextExchanges);
       setAnswer("");
-      const last = idx >= questions.length - 1;
+      setCurrentQuestion(null);
+      const last = idx >= TOTAL_QUESTIONS - 1;
       if (last) {
         setFinishing(true);
         try {
           const recap = await recapFn({
             data: {
               team, managerName, context, brief,
-              exchanges: [...exchanges, { question: q, answer: a }],
+              exchanges: nextExchanges,
             },
           });
           onRecap?.(recap.article);
@@ -187,6 +208,9 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
         }
       } else {
         setIdx((i) => i + 1);
+        // Fetch the next question, using the freshly-updated exchange list so
+        // the reporter can react to what was just said and avoid repeats.
+        void fetchQuestion(nextExchanges);
       }
     } catch (e) {
       setError(formatErr(e));
@@ -214,19 +238,19 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
 
         {error && <div className="rounded-lg border-l-4 border-highlight-red bg-card px-3 py-2 text-sm">{error}</div>}
 
-        {!questions && loading && (
+        {!currentQuestion && loading && (
           <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-            The press corps is gathering questions…
+            {exchanges.length === 0 ? "The press corps is gathering questions…" : "The next reporter is raising their hand…"}
           </div>
         )}
 
-        {questions && (
+        {currentQuestion && (
           <div className="space-y-3">
             <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-              Question {idx + 1} of {questions.length}
+              Question {idx + 1} of {TOTAL_QUESTIONS}
             </div>
             <div className="rounded-xl border bg-card p-4">
-              <p className="text-sm font-semibold leading-relaxed">{questions[idx]}</p>
+              <p className="text-sm font-semibold leading-relaxed">{currentQuestion}</p>
             </div>
             <textarea
               value={answer}
@@ -242,7 +266,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
                 Walk out
               </Button>
               <Button onClick={submit} disabled={loading || finishing || !answer.trim()} className="font-semibold">
-                {finishing ? "Filing recap…" : loading ? "Reading the room…" : (idx >= questions.length - 1 ? "Submit final answer" : "Submit answer")}
+                {finishing ? "Filing recap…" : loading ? "Reading the room…" : (idx >= TOTAL_QUESTIONS - 1 ? "Submit final answer" : "Submit answer")}
               </Button>
             </div>
           </div>
