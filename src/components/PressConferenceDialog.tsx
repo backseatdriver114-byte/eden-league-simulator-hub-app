@@ -37,12 +37,13 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
     applyPlayerMoraleDelta, applyTeamMoraleDelta, applyRelationDelta,
     applyManagerRespectDelta, applyManagerHarshnessSample, appendPressEntry,
   } = useLeague();
-  const askQs = useServerFn(generatePressQuestions);
+  const askNext = useServerFn(generateNextPressQuestion);
   const scoreA = useServerFn(scorePressAnswer);
   const recapFn = useServerFn(writePressRecap);
 
-  const [questions, setQuestions] = useState<string[] | null>(null);
-  const [idx, setIdx] = useState(0);
+  const TOTAL_QUESTIONS = 4;
+  const [currentQuestion, setCurrentQuestion] = useState<string | null>(null);
+  const [idx, setIdx] = useState(0); // 0-indexed position of current question
   const [answer, setAnswer] = useState("");
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,20 +56,37 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
   const baseInfluence = state.settings?.pressInfluenceBaseline ?? 1;
   const mult = influenceMult(respect, baseInfluence);
 
-  // Load questions on open.
+  // Fetch a single question (the opening one when called on open, or the
+  // next follow-up after each answered exchange).
+  async function fetchQuestion(priorExchanges: Exchange[]) {
+    const brief = buildPressBrief({ state, standings, leaderboards, team, context, fixtureId });
+    if (!brief) { setError("Couldn't build a press brief for this team."); return; }
+    setLoading(true);
+    try {
+      const r = await askNext({
+        data: {
+          team, managerName, context, brief,
+          priorExchanges,
+          questionNumber: priorExchanges.length + 1,
+          totalQuestions: TOTAL_QUESTIONS,
+        },
+      });
+      setCurrentQuestion(r.question);
+    } catch (e) {
+      setError(formatErr(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Load first question on open.
   useEffect(() => {
     if (!open) return;
     const key = `${team}::${context}::${fixtureId ?? ""}::${state.currentWeek}`;
     if (startedRef.current === key) return;
     startedRef.current = key;
-    setQuestions(null); setIdx(0); setAnswer(""); setExchanges([]); setError(null);
-    const brief = buildPressBrief({ state, standings, leaderboards, team, context, fixtureId });
-    if (!brief) { setError("Couldn't build a press brief for this team."); return; }
-    setLoading(true);
-    askQs({ data: { team, managerName, context, brief, count: 4 } })
-      .then((r) => setQuestions(r.questions))
-      .catch((e) => setError(formatErr(e)))
-      .finally(() => setLoading(false));
+    setCurrentQuestion(null); setIdx(0); setAnswer(""); setExchanges([]); setError(null);
+    void fetchQuestion([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, team, context, fixtureId]);
 
