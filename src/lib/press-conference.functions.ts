@@ -312,7 +312,7 @@ export const scorePressAnswer = createServerFn({ method: "POST" })
     }
     return {
       targets,
-      respectDelta: clampDelta(Number(parsed.respectDelta), 3),
+      respectDelta: clampDelta(Number(parsed.respectDelta), 8),
       harshness: clamp01(Number(parsed.harshness)),
       summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 120) : "",
     };
