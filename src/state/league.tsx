@@ -162,6 +162,24 @@ export interface LeagueState {
   // Single relationship per AI manager, shared across all user clubs (since
   // the user is one person in real life).
   relations?: Record<string, number>;
+  // Public press conference archive. Every Q/A from every press conference
+  // is recorded here so AI features (future press questions, news articles,
+  // DM replies) can reference what the manager actually said on the record.
+  pressArchive?: PressArchiveEntry[];
+}
+
+export interface PressArchiveEntry {
+  id: string;
+  season: number;
+  week: number;
+  team: string;          // club holding the conference
+  managerName: string;   // speaker
+  context: "general" | "pre" | "post";
+  question: string;
+  answer: string;
+  summary?: string;      // AI-scored one-clause headline (optional)
+  targets?: { kind: "team" | "player" | "manager"; team?: string; name?: string }[];
+  createdAt: string;     // ISO timestamp
 }
 
 export interface StandingRow {
