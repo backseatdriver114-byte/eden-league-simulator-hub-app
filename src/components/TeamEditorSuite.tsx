@@ -207,6 +207,24 @@ export function TeamEditorSuite() {
             />
           </div>
         </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-amber-300/60 bg-card/80 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Respect Rating</div>
+            <div className="text-lg font-bold text-amber-900">
+              {typeof manager?.respect === "number" ? manager.respect.toFixed(1) : "50.0"}
+              <span className="ml-1 text-xs font-normal text-muted-foreground">/ 100</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">How the league press judges this manager. Moves via press conferences & weekly drift.</p>
+          </div>
+          <div className="rounded-lg border border-amber-300/60 bg-card/80 px-3 py-2">
+            <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Harshness Rating</div>
+            <div className="text-lg font-bold text-amber-900">
+              {typeof manager?.harshness === "number" ? manager.harshness.toFixed(2) : "0.50"}
+              <span className="ml-1 text-xs font-normal text-muted-foreground">/ 1.00</span>
+            </div>
+            <p className="text-[10px] text-muted-foreground">0 = sugary, 0.5 = balanced, 1 = scathing. Averaged from press conference tone.</p>
+          </div>
+        </div>
         <div className="mt-3 flex items-center gap-3">
           <Button size="sm" variant="secondary" onClick={saveManager} disabled={!mgrDirty || !mgrNameDraft.trim()}>
             SAVE MANAGER
