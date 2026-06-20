@@ -1,0 +1,1 @@
+REVOKE UPDATE ON public.league_state FROM sandbox_exec;

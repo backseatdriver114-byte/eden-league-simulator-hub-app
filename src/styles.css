@@ -1,0 +1,112 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Eden League Data Hub — clean sports-analytics design system.
+ * Light gray / white / steel tones. No dark blocks, no oversaturated colors.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: "Archivo", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-starter: var(--starter);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-panel: var(--panel);
+  --color-console-bg: var(--console-bg);
+  --color-console-fg: var(--console-fg);
+  --color-highlight-red: var(--highlight-red);
+  --color-highlight-red-foreground: var(--highlight-red-foreground);
+  --color-highlight-blue: var(--highlight-blue);
+  --color-highlight-blue-foreground: var(--highlight-blue-foreground);
+}
+
+:root {
+  --radius: 0.6rem;
+  /* Vibrant soccer-pitch green + chalk-white stadium palette */
+  --background: oklch(0.82 0.13 146);
+  --foreground: oklch(0.22 0.06 150);
+  --card: oklch(0.995 0.006 142);
+  --card-foreground: oklch(0.22 0.06 150);
+  --popover: oklch(0.995 0.006 142);
+  --popover-foreground: oklch(0.22 0.06 150);
+  /* Energetic grass green */
+  --primary: oklch(0.55 0.19 148);
+  --primary-foreground: oklch(0.99 0.01 142);
+  --primary-glow: oklch(0.72 0.2 150);
+  --secondary: oklch(0.9 0.07 146);
+  --secondary-foreground: oklch(0.28 0.08 150);
+  --muted: oklch(0.92 0.05 146);
+  --muted-foreground: oklch(0.42 0.05 150);
+  /* Stadium gold accent */
+  --accent: oklch(0.82 0.16 86);
+  --accent-foreground: oklch(0.28 0.1 90);
+  --destructive: oklch(0.55 0.2 27);
+  --destructive-foreground: oklch(0.99 0.002 250);
+  --success: oklch(0.58 0.18 146);
+  --success-foreground: oklch(0.99 0.002 250);
+  --starter: oklch(0.86 0.14 138);
+  --border: oklch(0.78 0.06 146);
+  --input: oklch(0.8 0.05 146);
+  --ring: oklch(0.55 0.19 148);
+  --panel: oklch(0.9 0.07 146);
+  --console-bg: oklch(0.24 0.06 150);
+  --console-fg: oklch(0.9 0.14 145);
+  /* Energetic red + blue highlights for accents across the app */
+  --highlight-red: oklch(0.58 0.22 25);
+  --highlight-red-foreground: oklch(0.99 0.01 25);
+  --highlight-blue: oklch(0.55 0.2 255);
+  --highlight-blue-foreground: oklch(0.99 0.01 255);
+  /* Stadium effects */
+  --gradient-pitch: linear-gradient(160deg, oklch(0.6 0.16 150) 0%, oklch(0.78 0.14 146) 55%, oklch(0.86 0.12 142) 100%);
+  --shadow-glow: 0 0 0 1px color-mix(in oklab, var(--primary) 25%, transparent), 0 12px 30px -12px color-mix(in oklab, var(--primary) 55%, transparent);
+  --gradient-rb: linear-gradient(90deg, var(--highlight-blue) 0%, var(--primary) 50%, var(--highlight-red) 100%);
+}
+
+@theme inline {
+  --color-primary-glow: var(--primary-glow);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  body {
+    background-color: var(--color-background);
+    background-image: var(--gradient-pitch),
+      repeating-linear-gradient(90deg, color-mix(in oklab, #ffffff 6%, transparent) 0 56px, transparent 56px 112px);
+    background-attachment: fixed;
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+}
+
+@utility glow {
+  box-shadow: var(--shadow-glow);
+}

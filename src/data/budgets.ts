@@ -1,0 +1,28 @@
+// Initial club budgets from EDEN LEAGUE budgets sheet. Editable at runtime.
+// Names normalized to canonical roster names ("Edenaks" -> "Edenak's").
+export const INITIAL_BUDGETS: Record<string, string> = {
+  "Spams": "$21M",
+  "Gugu Team": "$2M",
+  "Vegetables and Fruits": "$24.6M",
+  "Kookch United": "$20.3M",
+  "Cocos": "$4.8M",
+  "Nicoland Republic": "$42.5M",
+  "Dangerous Journeys": "$16.4M",
+  "Socks": "$22.5M",
+  "Brownies": "$15.5M",
+  "Egypts": "$23.2M",
+  "Grogles FC": "$1.4M",
+  "Fish": "$25.1M",
+  "Choki Choki Baba": "$21.3M",
+  "Lights": "$5.6M",
+  "Eden Ultimate Team 2": "$7.5M",
+  "Creams": "$20.9M",
+  "Wondo Condo": "$8.8M",
+  "Vipers": "$38.1M",
+  "Edeks": "$40M",
+  "Scoops": "$6.8M",
+  "Grampatomnon": "$24.3M",
+  "Shoc Shoc": "$23M",
+  "Isaiahs": "$12.1M",
+  "Edenak's": "$24.7M",
+};

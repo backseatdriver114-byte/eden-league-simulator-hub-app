@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
+  <defs>
+    <clipPath id="shield-body-clip">
+      <path d="M 120,220 L 480,220 C 480,395 400,495 300,545 C 200,495 120,395 120,220 Z" />
+    </clipPath>
+    
+    <g id="star">
+      <polygon points="0,-18 5.3,-5.4 18.7,-5.4 7.9,2.5 12,15.1 0,7.3 -12,15.1 -7.9,2.5 -18.7,-5.4 -5.3,-5.4" fill="#FFC107" stroke="#0A1C3A" stroke-width="2.5" stroke-linejoin="round"/>
+    </g>
+
+    <g id="mini-star-dark">
+      <polygon points="0,-7 2.1,-2.1 7.35,-2.1 3.15,1.05 4.72,5.95 0,2.8 -4.72,5.95 -3.15,1.05 -7.35,-2.1 -2.1,-2.1" fill="#0A1C3A"/>
+    </g>
+
+    <g id="mini-star-gold">
+      <polygon points="0,-7 2.1,-2.1 7.35,-2.1 3.15,1.05 4.72,5.95 0,2.8 -4.72,5.95 -3.15,1.05 -7.35,-2.1 -2.1,-2.1" fill="#DDB05B"/>
+    </g>
+  </defs>
+
+  <rect width="600" height="600" fill="#FFFFFF"/>
+
+  <g id="logo" font-family="'Montserrat', 'Arial Black', 'Helvetica', sans-serif">
+    
+    <path d="M 120,180 L 180,70 L 240,180 L 300,50 L 360,180 L 420,70 L 480,180 L 480,220 C 480,395 400,495 300,545 C 200,495 120,395 120,220 Z" fill="none" stroke="#0A1C3A" stroke-width="12" stroke-linejoin="round"/>
+
+    <path d="M 120,180 L 180,70 L 240,180 L 300,50 L 360,180 L 420,70 L 480,180 Z" fill="#F8F9FA" stroke="#0A1C3A" stroke-width="4" stroke-linejoin="round"/>
+
+    <use href="#mini-star-gold" x="180" y="96"/>
+    <use href="#mini-star-dark" x="152" y="142"/>
+    <use href="#mini-star-dark" x="208" y="142"/>
+    <use href="#mini-star-dark" x="162" y="162"/>
+    <use href="#mini-star-dark" x="198" y="162"/>
+
+    <use href="#mini-star-gold" x="300" y="78"/>
+    <use href="#mini-star-dark" x="272" y="142"/>
+    <use href="#mini-star-dark" x="328" y="142"/>
+    <use href="#mini-star-dark" x="300" y="150"/> <use href="#mini-star-dark" x="282" y="162"/>
+    <use href="#mini-star-dark" x="318" y="162"/>
+
+    <use href="#mini-star-gold" x="420" y="96"/>
+    <use href="#mini-star-dark" x="392" y="142"/>
+    <use href="#mini-star-dark" x="448" y="142"/>
+    <use href="#mini-star-dark" x="402" y="162"/>
+    <use href="#mini-star-dark" x="438" y="162"/>
+
+    <use href="#star" x="180" y="128"/>
+    <use href="#star" x="300" y="112"/>
+    <use href="#star" x="420" y="128"/>
+
+    <g clip-path="url(#shield-body-clip)">
+      <rect x="120" y="220" width="47" height="330" fill="#D32F2F"/>
+      <rect x="167" y="220" width="47" height="330" fill="#FFFFFF"/>
+      <rect x="214" y="220" width="46" height="330" fill="#D32F2F"/>
+
+      <rect x="260" y="220" width="80" height="330" fill="#0A1C3A"/>
+
+      <rect x="340" y="220" width="47" height="330" fill="#1565C0"/>
+      <rect x="387" y="220" width="47" height="330" fill="#FFC107"/>
+      <rect x="434" y="220" width="46" height="330" fill="#1565C0"/>
+    </g>
+
+    <path d="M 120,220 L 480,220 C 480,395 400,495 300,545 C 200,495 120,395 120,220 Z" fill="none" stroke="#0A1C3A" stroke-width="6" stroke-linejoin="round"/>
+
+    <rect x="120" y="175" width="360" height="46" fill="#FFC107" stroke="#0A1C3A" stroke-width="6" stroke-linejoin="round"/>
+    <text x="300" y="210" font-size="34" font-weight="900" fill="#0A1C3A" text-anchor="middle" letter-spacing="4">EDEN</text>
+
+    <g fill="#FFFFFF" font-size="30" font-weight="900" text-anchor="middle">
+      <text x="300" y="275">L</text>
+      <text x="300" y="318">E</text>
+      <text x="300" y="361">A</text>
+      <text x="300" y="404">G</text>
+      <text x="300" y="447">U</text>
+      <text x="300" y="490">E</text>
+    </g>
+
+  </g>
+</svg>

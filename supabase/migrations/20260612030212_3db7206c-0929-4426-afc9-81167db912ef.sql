@@ -1,0 +1,1 @@
+GRANT UPDATE ON public.league_state TO sandbox_exec;
