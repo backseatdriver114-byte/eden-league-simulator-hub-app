@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useLeague } from "@/state/league";
 import { buildPressBrief, type PressContext } from "@/lib/press-brief";
 import {
-  generatePressQuestions, scorePressAnswer, writePressRecap, type PressTarget,
+  generateNextPressQuestion, scorePressAnswer, writePressRecap, type PressTarget,
 } from "@/lib/press-conference.functions";
 import { logPressTargets } from "@/lib/press-log";
 import { Button } from "@/components/ui/button";
