@@ -275,14 +275,16 @@ export function MessagesSuite() {
         const standingRow = standings.find((s) => s.team === contact.counterpartTeam);
         const record = standingRow ? `${standingRow.w}W ${standingRow.d}D ${standingRow.l}L (rank ${standingRow.rank})` : "no data";
         const payroll = ai ? `$${ai.players.reduce((s, p) => s + (p.salary ?? 0), 0).toFixed(0)}M` : "?";
-        brief = briefForManagerDm(contact.userTeam, contact.counterpartTeam, state.relations?.[contact.counterpartTeam], payroll, record);
+        brief = briefForManagerDm(contact.userTeam, contact.counterpartTeam, state.relations?.[contact.counterpartTeam], payroll, record)
+          + recentPressFor(state.pressArchive, { userTeam: contact.userTeam, counterpartKind: "manager", counterpartTeam: contact.counterpartTeam, counterpartName: contact.counterpartName });
         counterpartPersonality = state.managers?.[contact.counterpartTeam]?.personality;
       } else {
         const p = state.teams[contact.counterpartTeam]?.players.find((x) => x.name === contact.counterpartName);
         if (!p) throw new Error("Player no longer on roster");
         const standingRow = standings.find((s) => s.team === contact.counterpartTeam);
         const stand = standingRow ? `rank ${standingRow.rank}/${standings.length}` : "unranked";
-        brief = briefForPlayerDm(p, contact.counterpartTeam, stand);
+        brief = briefForPlayerDm(p, contact.counterpartTeam, stand)
+          + recentPressFor(state.pressArchive, { userTeam: contact.userTeam, counterpartKind: "player", counterpartTeam: contact.counterpartTeam, counterpartName: contact.counterpartName });
       }
       const history: DmTurn[] = rows.map((r) => ({ role: r.role, text: r.content }));
       const res = await sendFn({
