@@ -383,13 +383,15 @@ export function MessagesSuite() {
             const standingRow = standings.find((s) => s.team === hit.contact.counterpartTeam);
             const record = standingRow ? `${standingRow.w}W ${standingRow.d}D ${standingRow.l}L (rank ${standingRow.rank})` : "no data";
             const payroll = ai ? `$${ai.players.reduce((s, p) => s + (p.salary ?? 0), 0).toFixed(0)}M` : "?";
-            brief = briefForManagerDm(hit.contact.userTeam, hit.contact.counterpartTeam, state.relations?.[hit.contact.counterpartTeam], payroll, record);
+            brief = briefForManagerDm(hit.contact.userTeam, hit.contact.counterpartTeam, state.relations?.[hit.contact.counterpartTeam], payroll, record)
+              + recentPressFor(state.pressArchive, { userTeam: hit.contact.userTeam, counterpartKind: "manager", counterpartTeam: hit.contact.counterpartTeam, counterpartName: hit.contact.counterpartName });
           } else {
             const pl = state.teams[hit.contact.counterpartTeam]?.players.find((x) => x.name === hit.contact.counterpartName);
             if (!pl) continue;
             const standingRow = standings.find((s) => s.team === hit.contact.counterpartTeam);
             const stand = standingRow ? `rank ${standingRow.rank}/${standings.length}` : "unranked";
-            brief = briefForPlayerDm(pl, hit.contact.counterpartTeam, stand);
+            brief = briefForPlayerDm(pl, hit.contact.counterpartTeam, stand)
+              + recentPressFor(state.pressArchive, { userTeam: hit.contact.userTeam, counterpartKind: "player", counterpartTeam: hit.contact.counterpartTeam, counterpartName: hit.contact.counterpartName });
           }
           // Load existing history for the thread so the opener feels in-context.
           const { data: existing } = await supabase
