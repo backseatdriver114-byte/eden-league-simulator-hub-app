@@ -35,7 +35,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
   const {
     state, standings, leaderboards,
     applyPlayerMoraleDelta, applyTeamMoraleDelta, applyRelationDelta,
-    applyManagerRespectDelta, applyManagerHarshnessSample,
+    applyManagerRespectDelta, applyManagerHarshnessSample, appendPressEntry,
   } = useLeague();
   const askQs = useServerFn(generatePressQuestions);
   const scoreA = useServerFn(scorePressAnswer);
