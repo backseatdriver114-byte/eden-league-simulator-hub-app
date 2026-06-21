@@ -119,17 +119,20 @@ export function NewsSuite() {
         <span className="font-semibold text-foreground"> real results, ratings, and stats</span> — no invented numbers.
       </div>
 
-      {userTeams.length > 0 && (
-        <section className="rounded-xl border border-stadium-gold/60 bg-card p-4 shadow">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-extrabold uppercase tracking-wide text-stadium-gold">Press Conferences</h2>
-              <p className="text-[11px] text-muted-foreground">
-                Face the press as one of your clubs' managers. Praise or criticism in your answers
-                moves morale in real time and shifts your relationships with other managers.
-              </p>
-            </div>
+      <section className="rounded-xl border border-stadium-gold/60 bg-card p-4 shadow">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-extrabold uppercase tracking-wide text-stadium-gold">Press Conferences</h2>
+            <p className="text-[11px] text-muted-foreground">
+              Face the press as one of your clubs' managers. Praise or criticism in your answers
+              moves morale in real time and shifts your relationships with other managers.
+              AI managers also hold a short press conference every week behind the scenes.
+            </p>
           </div>
+          <Button size="sm" variant="outline" className="font-semibold" onClick={() => setArchiveOpen(true)}>
+            📚 View Press Conference Archives
+          </Button>
+        </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
             {userTeams.map((t) => (
