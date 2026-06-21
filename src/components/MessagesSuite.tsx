@@ -488,10 +488,20 @@ export function MessagesSuite() {
             .select()
             .maybeSingle();
           const row = (inserted as unknown) as RawRow | null;
-          toast(`New DM from ${hit.contact.counterpartName}`, { description: res.reply.slice(0, 120) });
-          // If this is the active thread, append it live.
+          const senderLabel = hit.contact.kind === "player" ? `${hit.contact.counterpartName} messaged you` : `${hit.contact.counterpartName} messaged you`;
+          toast(senderLabel, { description: res.reply.slice(0, 120) });
+          publishAppNotif({
+            kind: "dm",
+            title: senderLabel,
+            detail: res.reply.slice(0, 140),
+          });
+          // If this is the active thread, append it live AND mark as seen.
           if (row && contact && keyOf(contact) === keyOf(hit.contact)) {
             setRows((r) => [...r, row]);
+            setLastSeen(hit.contact, new Date(row.created_at).getTime());
+          } else {
+            // Otherwise bump the unread badge for that thread.
+            setUnread((u) => ({ ...u, [keyOf(hit.contact)]: (u[keyOf(hit.contact)] ?? 0) + 1 }));
           }
         } catch (e) {
           const m = e instanceof Error ? e.message : String(e);
