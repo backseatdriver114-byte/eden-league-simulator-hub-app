@@ -205,7 +205,9 @@ export function NewsSuite() {
             />
           )}
         </section>
-      )}
+
+        <PressArchiveDialog open={archiveOpen} onClose={() => setArchiveOpen(false)} />
+
 
 
       <div className="inline-flex flex-wrap gap-1 rounded-lg bg-muted p-1">
