@@ -87,7 +87,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
     const key = `${team}::${context}::${fixtureId ?? ""}::${state.currentWeek}`;
     if (startedRef.current === key) return;
     startedRef.current = key;
-    setCurrentQuestion(null); setIdx(0); setAnswer(""); setExchanges([]); setError(null);
+    setCurrentQuestion(null); setIdx(0); setAnswer(""); setExchanges([]); setError(null); setFocus("");
     void fetchQuestion([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, team, context, fixtureId]);
