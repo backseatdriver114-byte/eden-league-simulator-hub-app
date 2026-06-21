@@ -8,6 +8,7 @@ import { buildPostgameBrief, buildRoundupBrief, buildDramaBrief } from "@/lib/ne
 import { downloadText } from "@/lib/league-export";
 import { Button } from "@/components/ui/button";
 import { PressConferenceDialog } from "@/components/PressConferenceDialog";
+import { PressArchiveDialog } from "@/components/PressArchiveDialog";
 import type { PressContext } from "@/lib/press-brief";
 
 type Tab = NewsKind;
