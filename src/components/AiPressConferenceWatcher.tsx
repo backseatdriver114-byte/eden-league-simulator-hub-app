@@ -165,11 +165,13 @@ function applyTargets(targets: PressTarget[], speakerTeam: string, mult: number,
         deps.applyPlayerMoraleDelta(t.team, t.name, Math.round(t.moraleDelta * mult * ratingCap));
       }
     } else if (t.kind === "manager") {
-      const mgr = deps.stateRef.current.managers?.[t.team];
-      if (!mgr) continue;
-      if ((mgr.personality ?? "").trim().toUpperCase() !== "USER CONTROLLED") continue;
-      // Only user-controlled clubs participate in the relations system.
-      deps.applyRelationDelta(t.team, t.relationDelta * mult);
+      // AI speaker talking about a manager. Relations are USER↔AI, so we only
+      // update if the TARGET is a user-controlled team — and we record the
+      // shift against the SPEAKER's relationship score.
+      const targetMgr = deps.stateRef.current.managers?.[t.team];
+      if (!targetMgr) continue;
+      if ((targetMgr.personality ?? "").trim().toUpperCase() !== "USER CONTROLLED") continue;
+      deps.applyRelationDelta(speakerTeam, t.relationDelta * mult);
     }
   }
 }
