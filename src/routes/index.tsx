@@ -17,6 +17,7 @@ import { NegotiationSuite } from "@/components/NegotiationSuite";
 import { DraftSuite } from "@/components/DraftSuite";
 import { MessagesSuite } from "@/components/MessagesSuite";
 import { ManagerGenerationWatcher } from "@/components/ManagerGenerationWatcher";
+import { AiPressConferenceWatcher } from "@/components/AiPressConferenceWatcher";
 import { NavigationProvider, useNavigation } from "@/state/navigation";
 import { downloadLeagueExport, restoreManagerMessages, type ManagerMessageRow } from "@/lib/league-export";
 import { Button } from "@/components/ui/button";
