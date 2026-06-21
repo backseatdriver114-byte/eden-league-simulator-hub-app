@@ -8,6 +8,7 @@ import { buildPostgameBrief, buildRoundupBrief, buildDramaBrief } from "@/lib/ne
 import { downloadText } from "@/lib/league-export";
 import { Button } from "@/components/ui/button";
 import { PressConferenceDialog } from "@/components/PressConferenceDialog";
+import { PressArchiveDialog } from "@/components/PressArchiveDialog";
 import type { PressContext } from "@/lib/press-brief";
 
 type Tab = NewsKind;
@@ -33,6 +34,7 @@ export function NewsSuite() {
   // Press conference dialog state.
   const [press, setPress] = useState<{ team: string; context: PressContext; fixtureId?: string } | null>(null);
   const [pressArticles, setPressArticles] = useState<{ id: string; team: string; context: PressContext; text: string; week: number }[]>([]);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const exempt = state.settings?.contractExemptTeams ?? [];
   const userTeams = state.teamOrder.filter((t) => exempt.includes(t));
@@ -117,17 +119,20 @@ export function NewsSuite() {
         <span className="font-semibold text-foreground"> real results, ratings, and stats</span> — no invented numbers.
       </div>
 
-      {userTeams.length > 0 && (
-        <section className="rounded-xl border border-stadium-gold/60 bg-card p-4 shadow">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm font-extrabold uppercase tracking-wide text-stadium-gold">Press Conferences</h2>
-              <p className="text-[11px] text-muted-foreground">
-                Face the press as one of your clubs' managers. Praise or criticism in your answers
-                moves morale in real time and shifts your relationships with other managers.
-              </p>
-            </div>
+      <section className="rounded-xl border border-stadium-gold/60 bg-card p-4 shadow">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-extrabold uppercase tracking-wide text-stadium-gold">Press Conferences</h2>
+            <p className="text-[11px] text-muted-foreground">
+              Face the press as one of your clubs' managers. Praise or criticism in your answers
+              moves morale in real time and shifts your relationships with other managers.
+              AI managers also hold a short press conference every week behind the scenes.
+            </p>
           </div>
+          <Button size="sm" variant="outline" className="font-semibold" onClick={() => setArchiveOpen(true)}>
+            📚 View Press Conference Archives
+          </Button>
+        </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
             {userTeams.map((t) => (
@@ -200,7 +205,9 @@ export function NewsSuite() {
             />
           )}
         </section>
-      )}
+
+        <PressArchiveDialog open={archiveOpen} onClose={() => setArchiveOpen(false)} />
+
 
 
       <div className="inline-flex flex-wrap gap-1 rounded-lg bg-muted p-1">

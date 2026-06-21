@@ -17,6 +17,7 @@ import { NegotiationSuite } from "@/components/NegotiationSuite";
 import { DraftSuite } from "@/components/DraftSuite";
 import { MessagesSuite } from "@/components/MessagesSuite";
 import { ManagerGenerationWatcher } from "@/components/ManagerGenerationWatcher";
+import { AiPressConferenceWatcher } from "@/components/AiPressConferenceWatcher";
 import { NavigationProvider, useNavigation } from "@/state/navigation";
 import { downloadLeagueExport, restoreManagerMessages, type ManagerMessageRow } from "@/lib/league-export";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,7 @@ function Hub() {
   return (
     <div className="min-h-screen">
       <ManagerGenerationWatcher />
+      <AiPressConferenceWatcher />
       <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur">
         <div className="h-1 w-full" style={{ backgroundImage: "var(--gradient-rb)" }} />
         <div className="mx-auto max-w-6xl px-4 py-3">

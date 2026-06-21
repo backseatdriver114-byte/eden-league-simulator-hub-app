@@ -49,6 +49,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [focus, setFocus] = useState("");
   const startedRef = useRef<string | null>(null);
 
   const managerName = state.managers?.[team]?.name ?? "Manager";
@@ -69,6 +70,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
           priorExchanges,
           questionNumber: priorExchanges.length + 1,
           totalQuestions: TOTAL_QUESTIONS,
+          focus: focus.trim() || undefined,
         },
       });
       setCurrentQuestion(r.question);
@@ -85,7 +87,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
     const key = `${team}::${context}::${fixtureId ?? ""}::${state.currentWeek}`;
     if (startedRef.current === key) return;
     startedRef.current = key;
-    setCurrentQuestion(null); setIdx(0); setAnswer(""); setExchanges([]); setError(null);
+    setCurrentQuestion(null); setIdx(0); setAnswer(""); setExchanges([]); setError(null); setFocus("");
     void fetchQuestion([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, team, context, fixtureId]);
@@ -237,6 +239,19 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
         </div>
 
         {error && <div className="rounded-lg border-l-4 border-highlight-red bg-card px-3 py-2 text-sm">{error}</div>}
+
+        <label className="flex flex-col gap-1 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+          Press Angle <span className="font-normal normal-case text-muted-foreground">(optional — tell the reporters what to ask about: a player's form, a feud, the schedule, etc.)</span>
+          <textarea
+            value={focus}
+            onChange={(e) => setFocus(e.target.value)}
+            rows={2}
+            maxLength={400}
+            placeholder='e.g. "Ask about my striker\u2019s contract situation" \u00b7 "Push me on the rivalry with [team]"'
+            className="resize-y rounded-md border bg-background px-2 py-1.5 text-xs font-normal normal-case text-foreground placeholder:text-muted-foreground"
+            disabled={finishing}
+          />
+        </label>
 
         {!currentQuestion && loading && (
           <div className="rounded-xl border bg-card px-4 py-8 text-center text-sm text-muted-foreground">

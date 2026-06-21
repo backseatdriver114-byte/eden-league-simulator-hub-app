@@ -47,12 +47,11 @@ interface NextQuestionInput {
   managerName: string;
   context: PressContext;
   brief: string;
-  // What the press corps has already asked + how the manager answered, in
-  // order. Lets the next reporter follow up on the manager's exact words and
-  // avoid asking the same thing twice.
   priorExchanges: { question: string; answer: string }[];
-  questionNumber: number; // 1-indexed position in the conference
-  totalQuestions: number; // planned total for this conference
+  questionNumber: number;
+  totalQuestions: number;
+  // Optional user-supplied angle: things to touch on in the questions.
+  focus?: string;
 }
 
 interface ScoreInput {
@@ -192,6 +191,9 @@ export const generateNextPressQuestion = createServerFn({ method: "POST" })
       : data.priorExchanges
           .map((e, i) => `Q${i + 1}: ${e.question}\nA${i + 1}: ${e.answer}`)
           .join("\n");
+    const focusBlock = data.focus && data.focus.trim().length > 0
+      ? `\nMANAGER-REQUESTED ANGLE (the press has been tipped to lean into this — work it into the question naturally when it fits, but never invent facts):\n${data.focus.trim()}\n`
+      : "";
     const user = [
       `DATA (the only facts you may use):`,
       ``,
@@ -199,7 +201,7 @@ export const generateNextPressQuestion = createServerFn({ method: "POST" })
       ``,
       `CONTEXT: ${data.context} press conference for ${data.team} (manager: ${data.managerName}).`,
       `THIS IS QUESTION ${data.questionNumber} OF ${data.totalQuestions}.`,
-      ``,
+      focusBlock,
       `PRIOR EXCHANGES IN THIS CONFERENCE (do not repeat any topic already addressed):`,
       prior,
       ``,
@@ -352,4 +354,129 @@ export const writePressRecap = createServerFn({ method: "POST" })
     ].join("\n");
     const content = await callGateway(apiKey, RECAP_RULES, user, 0.8, false);
     return { article: content };
+  });
+
+// ---------------- 4. Full AI manager press conference (one shot) ----------------
+// Runs an AI-controlled manager's weekly press conference in a SINGLE call to
+// keep credit use bounded. Returns 1-3 Q&A pairs plus the same target-effects
+// shape as scorePressAnswer so the client can apply morale/relation/respect
+// deltas without further round trips.
+interface AiPressInput {
+  team: string;
+  managerName: string;
+  managerPersonality?: string;
+  brief: string;
+  validTeams: string[];
+  validManagers: { team: string; name: string }[];
+  validPlayers: { team: string; name: string }[];
+}
+
+const AI_PRESS_RULES = `
+You are simulating a full weekly press conference for an AI-controlled Eden League manager. You will play BOTH the reporter (asking questions) and the manager (answering in character).
+
+ABSOLUTE RULES:
+- Use ONLY facts present in the DATA / BRIEF block, the VALID lists, and prior on-record press quotes shown in the brief.
+- Generate 1 to 3 Q&A pairs total. Keep it lean (this is a routine weekly press, not a championship event). Default to 2 unless there is a clearly newsworthy storyline that justifies a third question.
+- The manager's voice MUST match their stated personality. Combative personalities push back, jab, or rant; warm personalities praise; quiet personalities stay terse. They are a real person — they can taunt rivals, defend their players, complain about the schedule, or take a shot at another club's manager if it fits their character and recent events.
+- Each answer is 1-3 sentences, conversational, plausible from a real manager.
+- Score the WHOLE conference's effect via the targets array — same shape as a user press conference. Reserve big magnitudes for genuinely pointed answers.
+
+OUTPUT FORMAT — JSON object exactly:
+{
+  "exchanges": [ {"question":"...","answer":"..."}, ... ],
+  "targets": [
+    {"kind":"team","name":"<valid team>","moraleDelta":<int -15..15>},
+    {"kind":"player","team":"<valid team>","name":"<valid player on that team>","moraleDelta":<int -25..25>},
+    {"kind":"manager","team":"<valid team>","relationDelta":<int -15..15>}
+  ],
+  "respectDelta": <number -8..8>,
+  "harshness": <number 0..1>,
+  "summary": "<one short clause, max 80 chars>"
+}
+No prose outside the JSON.
+`;
+
+export interface AiPressResult {
+  exchanges: { question: string; answer: string }[];
+  targets: PressTarget[];
+  respectDelta: number;
+  harshness: number;
+  summary: string;
+}
+
+export const runAiPressConference = createServerFn({ method: "POST" })
+  .inputValidator((data: AiPressInput) => {
+    if (!data || typeof data.brief !== "string" || data.brief.trim().length === 0) {
+      throw new Error("Missing press brief");
+    }
+    return data;
+  })
+  .handler(async ({ data }): Promise<AiPressResult> => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error("AI is not configured");
+    const teams = data.validTeams.join(", ");
+    const managers = data.validManagers.map((m) => `${m.name} (${m.team})`).join(", ");
+    const players = data.validPlayers.slice(0, 160).map((p) => `${p.name} [${p.team}]`).join(", ");
+    const user = [
+      `DATA (the only facts you may use):`,
+      ``,
+      data.brief,
+      ``,
+      `VALID TEAMS: ${teams}`,
+      `VALID MANAGERS: ${managers}`,
+      `VALID PLAYERS: ${players}`,
+      ``,
+      `THIS IS THE WEEKLY PRESS CONFERENCE FOR ${data.team}.`,
+      `MANAGER: ${data.managerName}.`,
+      `MANAGER PERSONALITY: ${data.managerPersonality ?? "Balanced, professional."}`,
+      ``,
+      `Generate 1-3 Q&A pairs plus the effects payload. JSON object only.`,
+    ].join("\n");
+    const content = await callGateway(apiKey, AI_PRESS_RULES, user, 0.9);
+    const parsed = extractJson<{
+      exchanges?: unknown; targets?: unknown[]; respectDelta?: unknown;
+      harshness?: unknown; summary?: unknown;
+    }>(content);
+    if (!parsed) return { exchanges: [], targets: [], respectDelta: 0, harshness: 0.5, summary: "" };
+
+    const rawEx = Array.isArray(parsed.exchanges) ? parsed.exchanges : [];
+    const exchanges = rawEx
+      .map((r) => {
+        const rr = r as Record<string, unknown>;
+        const q = typeof rr.question === "string" ? rr.question.trim() : "";
+        const a = typeof rr.answer === "string" ? rr.answer.trim() : "";
+        return q && a ? { question: q, answer: a } : null;
+      })
+      .filter((x): x is { question: string; answer: string } => !!x)
+      .slice(0, 3);
+
+    const validTeams = new Set(data.validTeams);
+    const validMgrTeams = new Set(data.validManagers.map((m) => m.team));
+    const validPlayerKey = new Set(data.validPlayers.map((p) => `${p.team}::${p.name}`));
+    const targets: PressTarget[] = [];
+    for (const raw of Array.isArray(parsed.targets) ? parsed.targets : []) {
+      const r = raw as Record<string, unknown>;
+      const kind = r.kind;
+      if (kind === "team") {
+        const name = typeof r.name === "string" ? r.name : "";
+        if (!validTeams.has(name)) continue;
+        targets.push({ kind, name, moraleDelta: clampDelta(Number(r.moraleDelta), 15) });
+      } else if (kind === "player") {
+        const team = typeof r.team === "string" ? r.team : "";
+        const name = typeof r.name === "string" ? r.name : "";
+        if (!validPlayerKey.has(`${team}::${name}`)) continue;
+        targets.push({ kind, team, name, moraleDelta: clampDelta(Number(r.moraleDelta), 25) });
+      } else if (kind === "manager") {
+        const team = typeof r.team === "string" ? r.team : "";
+        if (!validMgrTeams.has(team)) continue;
+        targets.push({ kind, team, relationDelta: clampDelta(Number(r.relationDelta), 15) });
+      }
+    }
+    return {
+      exchanges,
+      targets,
+      respectDelta: clampDelta(Number(parsed.respectDelta), 8),
+      harshness: clamp01(Number(parsed.harshness)),
+      summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 120) : "",
+    };
   });

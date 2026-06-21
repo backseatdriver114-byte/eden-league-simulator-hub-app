@@ -3,6 +3,7 @@ import { useLeague } from "@/state/league";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { subscribeAiStatus } from "@/lib/ai-status";
+import { subscribeAppNotif } from "@/lib/app-notifications";
 
 type NotifKind =
   | "return"
@@ -15,7 +16,9 @@ type NotifKind =
   | "sack"
   | "ai-credits"
   | "ai-rate"
-  | "ai-fallback";
+  | "ai-fallback"
+  | "dm"
+  | "press-mention";
 
 
 interface Notif {
@@ -38,7 +41,8 @@ const KIND_META: Record<NotifKind, { icon: string; tone: string }> = {
   "ai-credits": { icon: "⚡", tone: "text-highlight-red" },
   "ai-rate": { icon: "⏳", tone: "text-stadium-gold" },
   "ai-fallback": { icon: "⇨", tone: "text-highlight-blue" },
-
+  dm: { icon: "✉", tone: "text-highlight-blue" },
+  "press-mention": { icon: "🎤", tone: "text-highlight-red" },
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
@@ -132,6 +136,13 @@ export function NotificationCenter() {
           detail: "Lovable AI is unavailable or out of credits — the next provider in the fallback chain handled this request.",
         }]);
       }
+    });
+  }, []);
+
+  // Cross-component bus: DM received + press-conference mentions of user teams.
+  useEffect(() => {
+    return subscribeAppNotif((n) => {
+      push([{ kind: n.kind, title: n.title, detail: n.detail }]);
     });
   }, []);
 

@@ -2,7 +2,7 @@
 // rival AI managers OR to players on their own roster. Persisted to Cloud
 // (manager_messages table). Every message applies a small morale/relations
 // effect via the score returned from the AI server fn.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportAiOutcome } from "@/lib/ai-status";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLeague, isPlayerOut, type LeaguePlayer } from "@/state/league";
 import { sendDm, scoreBroadcast, type Counterpart, type DmTurn } from "@/lib/messages.functions";
 import { relationLabel } from "@/lib/relations";
+import { publishAppNotif } from "@/lib/app-notifications";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -111,7 +112,20 @@ export function MessagesSuite() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Per-thread unread counts (counts of AI/press messages newer than last seen).
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const lastSeenKey = useCallback((c: ContactKey) => `dm-seen:${keyOf(c)}`, []);
+  const getLastSeen = useCallback((c: ContactKey): number => {
+    try {
+      const v = typeof window !== "undefined" ? window.localStorage.getItem(lastSeenKey(c)) : null;
+      return v ? Number(v) : 0;
+    } catch { return 0; }
+  }, [lastSeenKey]);
+  const setLastSeen = useCallback((c: ContactKey, ts: number) => {
+    try { window.localStorage.setItem(lastSeenKey(c), String(ts)); } catch { /* ignore */ }
+  }, [lastSeenKey]);
 
   const aiManagerContacts = useMemo(() =>
     state.teamOrder
@@ -128,7 +142,7 @@ export function MessagesSuite() {
     return (state.teams[userTeam]?.players ?? []).slice().sort((a, b) => b.rating - a.rating);
   }, [state.teams, userTeam]);
 
-  // Load thread when contact changes.
+  // Load thread when contact changes; also mark thread as read.
   useEffect(() => {
     if (!contact) { setRows([]); return; }
     let cancelled = false;
@@ -140,9 +154,48 @@ export function MessagesSuite() {
       .eq("counterpart_team", contact.counterpartTeam)
       .eq("counterpart_name", contact.counterpartName)
       .order("created_at", { ascending: true })
-      .then(({ data }) => { if (!cancelled) setRows(((data as unknown) as RawRow[]) ?? []); });
+      .then(({ data }) => {
+        if (cancelled) return;
+        const list = ((data as unknown) as RawRow[]) ?? [];
+        setRows(list);
+        if (list.length > 0) {
+          setLastSeen(contact, new Date(list[list.length - 1].created_at).getTime());
+        }
+        setUnread((u) => ({ ...u, [keyOf(contact)]: 0 }));
+      });
     return () => { cancelled = true; };
   }, [contact ? keyOf(contact) : null]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Compute unread counts across all threads for the current user club.
+  useEffect(() => {
+    if (!userTeam) return;
+    let cancelled = false;
+    void supabase
+      .from("manager_messages")
+      .select("counterpart_kind, counterpart_team, counterpart_name, role, created_at")
+      .eq("user_team", userTeam)
+      .neq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(500)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const counts: Record<string, number> = {};
+        for (const r of data as { counterpart_kind: Counterpart; counterpart_team: string; counterpart_name: string; created_at: string }[]) {
+          const c: ContactKey = {
+            userTeam, kind: r.counterpart_kind,
+            counterpartTeam: r.counterpart_team, counterpartName: r.counterpart_name,
+          };
+          const k = keyOf(c);
+          const seen = getLastSeen(c);
+          if (new Date(r.created_at).getTime() > seen) {
+            counts[k] = (counts[k] ?? 0) + 1;
+          }
+        }
+        setUnread(counts);
+      });
+    return () => { cancelled = true; };
+  }, [userTeam, getLastSeen]);
+
 
   useEffect(() => {
     requestAnimationFrame(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight));
@@ -301,7 +354,10 @@ export function MessagesSuite() {
         },
       });
       const reply = await persist("ai", res.reply);
-      if (reply) setRows((r) => [...r, reply]);
+      if (reply) {
+        setRows((r) => [...r, reply]);
+        setLastSeen(contact, new Date(reply.created_at).getTime());
+      }
 
       // Apply effects.
       const volMul = (state.settings?.relationsVolatility ?? 1);
@@ -432,10 +488,20 @@ export function MessagesSuite() {
             .select()
             .maybeSingle();
           const row = (inserted as unknown) as RawRow | null;
-          toast(`New DM from ${hit.contact.counterpartName}`, { description: res.reply.slice(0, 120) });
-          // If this is the active thread, append it live.
+          const senderLabel = hit.contact.kind === "player" ? `${hit.contact.counterpartName} messaged you` : `${hit.contact.counterpartName} messaged you`;
+          toast(senderLabel, { description: res.reply.slice(0, 120) });
+          publishAppNotif({
+            kind: "dm",
+            title: senderLabel,
+            detail: res.reply.slice(0, 140),
+          });
+          // If this is the active thread, append it live AND mark as seen.
           if (row && contact && keyOf(contact) === keyOf(hit.contact)) {
             setRows((r) => [...r, row]);
+            setLastSeen(hit.contact, new Date(row.created_at).getTime());
+          } else {
+            // Otherwise bump the unread badge for that thread.
+            setUnread((u) => ({ ...u, [keyOf(hit.contact)]: (u[keyOf(hit.contact)] ?? 0) + 1 }));
           }
         } catch (e) {
           const m = e instanceof Error ? e.message : String(e);
@@ -492,6 +558,7 @@ export function MessagesSuite() {
               const k: ContactKey = { userTeam, kind: "manager", counterpartTeam: m.team, counterpartName: m.name };
               const active = contact && keyOf(contact) === keyOf(k);
               const rel = state.relations?.[m.team];
+              const n = unread[keyOf(k)] ?? 0;
               return (
                 <li key={m.team}>
                   <button
@@ -501,7 +568,12 @@ export function MessagesSuite() {
                   <span className="truncate">
                     {m.name} <span className="text-muted-foreground">· {m.team}</span>
                   </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">{typeof rel === "number" ? rel.toFixed(0) : "—"}</span>
+                    <span className="flex items-center gap-1.5">
+                      {n > 0 && (
+                        <span className="rounded-full bg-highlight-red px-1.5 text-[10px] font-bold text-white">{n > 9 ? "9+" : n}</span>
+                      )}
+                      <span className="font-mono text-[10px] text-muted-foreground">{typeof rel === "number" ? rel.toFixed(0) : "—"}</span>
+                    </span>
                   </button>
                 </li>
               );
@@ -515,6 +587,7 @@ export function MessagesSuite() {
             {ownPlayers.map((p) => {
               const k: ContactKey = { userTeam, kind: "player", counterpartTeam: userTeam, counterpartName: p.name };
               const active = contact && keyOf(contact) === keyOf(k);
+              const n = unread[keyOf(k)] ?? 0;
               return (
                 <li key={p.name}>
                   <button
@@ -524,7 +597,12 @@ export function MessagesSuite() {
                   <span className="truncate">
                     {p.name} <span className="text-muted-foreground">· {p.position}</span>
                   </span>
-                    <span className={`font-mono text-[10px] ${isPlayerOut(p) ? "text-highlight-red" : ""}`}>{(p.morale ?? 50).toFixed(0)}</span>
+                    <span className="flex items-center gap-1.5">
+                      {n > 0 && (
+                        <span className="rounded-full bg-highlight-red px-1.5 text-[10px] font-bold text-white">{n > 9 ? "9+" : n}</span>
+                      )}
+                      <span className={`font-mono text-[10px] ${isPlayerOut(p) ? "text-highlight-red" : ""}`}>{(p.morale ?? 50).toFixed(0)}</span>
+                    </span>
                   </button>
                 </li>
               );
