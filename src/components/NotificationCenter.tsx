@@ -139,6 +139,13 @@ export function NotificationCenter() {
     });
   }, []);
 
+  // Cross-component bus: DM received + press-conference mentions of user teams.
+  useEffect(() => {
+    return subscribeAppNotif((n) => {
+      push([{ kind: n.kind, title: n.title, detail: n.detail }]);
+    });
+  }, []);
+
 
   useEffect(() => {
     const leader = standings[0]?.team ?? null;
