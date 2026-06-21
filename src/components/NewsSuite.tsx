@@ -34,6 +34,7 @@ export function NewsSuite() {
   // Press conference dialog state.
   const [press, setPress] = useState<{ team: string; context: PressContext; fixtureId?: string } | null>(null);
   const [pressArticles, setPressArticles] = useState<{ id: string; team: string; context: PressContext; text: string; week: number }[]>([]);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const exempt = state.settings?.contractExemptTeams ?? [];
   const userTeams = state.teamOrder.filter((t) => exempt.includes(t));
