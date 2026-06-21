@@ -191,6 +191,9 @@ export const generateNextPressQuestion = createServerFn({ method: "POST" })
       : data.priorExchanges
           .map((e, i) => `Q${i + 1}: ${e.question}\nA${i + 1}: ${e.answer}`)
           .join("\n");
+    const focusBlock = data.focus && data.focus.trim().length > 0
+      ? `\nMANAGER-REQUESTED ANGLE (the press has been tipped to lean into this — work it into the question naturally when it fits, but never invent facts):\n${data.focus.trim()}\n`
+      : "";
     const user = [
       `DATA (the only facts you may use):`,
       ``,
@@ -198,7 +201,7 @@ export const generateNextPressQuestion = createServerFn({ method: "POST" })
       ``,
       `CONTEXT: ${data.context} press conference for ${data.team} (manager: ${data.managerName}).`,
       `THIS IS QUESTION ${data.questionNumber} OF ${data.totalQuestions}.`,
-      ``,
+      focusBlock,
       `PRIOR EXCHANGES IN THIS CONFERENCE (do not repeat any topic already addressed):`,
       prior,
       ``,
