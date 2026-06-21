@@ -47,12 +47,11 @@ interface NextQuestionInput {
   managerName: string;
   context: PressContext;
   brief: string;
-  // What the press corps has already asked + how the manager answered, in
-  // order. Lets the next reporter follow up on the manager's exact words and
-  // avoid asking the same thing twice.
   priorExchanges: { question: string; answer: string }[];
-  questionNumber: number; // 1-indexed position in the conference
-  totalQuestions: number; // planned total for this conference
+  questionNumber: number;
+  totalQuestions: number;
+  // Optional user-supplied angle: things to touch on in the questions.
+  focus?: string;
 }
 
 interface ScoreInput {
