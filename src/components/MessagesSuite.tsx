@@ -112,7 +112,20 @@ export function MessagesSuite() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Per-thread unread counts (counts of AI/press messages newer than last seen).
+  const [unread, setUnread] = useState<Record<string, number>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const lastSeenKey = useCallback((c: ContactKey) => `dm-seen:${keyOf(c)}`, []);
+  const getLastSeen = useCallback((c: ContactKey): number => {
+    try {
+      const v = typeof window !== "undefined" ? window.localStorage.getItem(lastSeenKey(c)) : null;
+      return v ? Number(v) : 0;
+    } catch { return 0; }
+  }, [lastSeenKey]);
+  const setLastSeen = useCallback((c: ContactKey, ts: number) => {
+    try { window.localStorage.setItem(lastSeenKey(c), String(ts)); } catch { /* ignore */ }
+  }, [lastSeenKey]);
 
   const aiManagerContacts = useMemo(() =>
     state.teamOrder
