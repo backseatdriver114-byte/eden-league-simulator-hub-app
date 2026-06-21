@@ -70,6 +70,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
           priorExchanges,
           questionNumber: priorExchanges.length + 1,
           totalQuestions: TOTAL_QUESTIONS,
+          focus: focus.trim() || undefined,
         },
       });
       setCurrentQuestion(r.question);
