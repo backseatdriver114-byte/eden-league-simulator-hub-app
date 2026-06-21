@@ -2,7 +2,7 @@
 // rival AI managers OR to players on their own roster. Persisted to Cloud
 // (manager_messages table). Every message applies a small morale/relations
 // effect via the score returned from the AI server fn.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { reportAiOutcome } from "@/lib/ai-status";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLeague, isPlayerOut, type LeaguePlayer } from "@/state/league";
 import { sendDm, scoreBroadcast, type Counterpart, type DmTurn } from "@/lib/messages.functions";
 import { relationLabel } from "@/lib/relations";
+import { publishAppNotif } from "@/lib/app-notifications";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
