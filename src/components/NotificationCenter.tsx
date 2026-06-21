@@ -41,7 +41,8 @@ const KIND_META: Record<NotifKind, { icon: string; tone: string }> = {
   "ai-credits": { icon: "⚡", tone: "text-highlight-red" },
   "ai-rate": { icon: "⏳", tone: "text-stadium-gold" },
   "ai-fallback": { icon: "⇨", tone: "text-highlight-blue" },
-
+  dm: { icon: "✉", tone: "text-highlight-blue" },
+  "press-mention": { icon: "🎤", tone: "text-highlight-red" },
 };
 
 const PROVIDER_LABELS: Record<string, string> = {
