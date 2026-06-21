@@ -16,7 +16,9 @@ type NotifKind =
   | "sack"
   | "ai-credits"
   | "ai-rate"
-  | "ai-fallback";
+  | "ai-fallback"
+  | "dm"
+  | "press-mention";
 
 
 interface Notif {
