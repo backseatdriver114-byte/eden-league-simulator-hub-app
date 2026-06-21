@@ -587,6 +587,7 @@ export function MessagesSuite() {
             {ownPlayers.map((p) => {
               const k: ContactKey = { userTeam, kind: "player", counterpartTeam: userTeam, counterpartName: p.name };
               const active = contact && keyOf(contact) === keyOf(k);
+              const n = unread[keyOf(k)] ?? 0;
               return (
                 <li key={p.name}>
                   <button
@@ -596,7 +597,12 @@ export function MessagesSuite() {
                   <span className="truncate">
                     {p.name} <span className="text-muted-foreground">· {p.position}</span>
                   </span>
-                    <span className={`font-mono text-[10px] ${isPlayerOut(p) ? "text-highlight-red" : ""}`}>{(p.morale ?? 50).toFixed(0)}</span>
+                    <span className="flex items-center gap-1.5">
+                      {n > 0 && (
+                        <span className="rounded-full bg-highlight-red px-1.5 text-[10px] font-bold text-white">{n > 9 ? "9+" : n}</span>
+                      )}
+                      <span className={`font-mono text-[10px] ${isPlayerOut(p) ? "text-highlight-red" : ""}`}>{(p.morale ?? 50).toFixed(0)}</span>
+                    </span>
                   </button>
                 </li>
               );
