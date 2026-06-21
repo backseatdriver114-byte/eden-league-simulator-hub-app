@@ -49,6 +49,7 @@ export function PressConferenceDialog({ open, team, context, fixtureId, onClose,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [finishing, setFinishing] = useState(false);
+  const [focus, setFocus] = useState("");
   const startedRef = useRef<string | null>(null);
 
   const managerName = state.managers?.[team]?.name ?? "Manager";
