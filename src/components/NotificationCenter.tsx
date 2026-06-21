@@ -3,6 +3,7 @@ import { useLeague } from "@/state/league";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { subscribeAiStatus } from "@/lib/ai-status";
+import { subscribeAppNotif } from "@/lib/app-notifications";
 
 type NotifKind =
   | "return"
