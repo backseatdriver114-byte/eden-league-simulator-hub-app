@@ -142,7 +142,7 @@ export function MessagesSuite() {
     return (state.teams[userTeam]?.players ?? []).slice().sort((a, b) => b.rating - a.rating);
   }, [state.teams, userTeam]);
 
-  // Load thread when contact changes.
+  // Load thread when contact changes; also mark thread as read.
   useEffect(() => {
     if (!contact) { setRows([]); return; }
     let cancelled = false;
@@ -154,9 +154,48 @@ export function MessagesSuite() {
       .eq("counterpart_team", contact.counterpartTeam)
       .eq("counterpart_name", contact.counterpartName)
       .order("created_at", { ascending: true })
-      .then(({ data }) => { if (!cancelled) setRows(((data as unknown) as RawRow[]) ?? []); });
+      .then(({ data }) => {
+        if (cancelled) return;
+        const list = ((data as unknown) as RawRow[]) ?? [];
+        setRows(list);
+        if (list.length > 0) {
+          setLastSeen(contact, new Date(list[list.length - 1].created_at).getTime());
+        }
+        setUnread((u) => ({ ...u, [keyOf(contact)]: 0 }));
+      });
     return () => { cancelled = true; };
   }, [contact ? keyOf(contact) : null]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Compute unread counts across all threads for the current user club.
+  useEffect(() => {
+    if (!userTeam) return;
+    let cancelled = false;
+    void supabase
+      .from("manager_messages")
+      .select("counterpart_kind, counterpart_team, counterpart_name, role, created_at")
+      .eq("user_team", userTeam)
+      .neq("role", "user")
+      .order("created_at", { ascending: false })
+      .limit(500)
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        const counts: Record<string, number> = {};
+        for (const r of data as { counterpart_kind: Counterpart; counterpart_team: string; counterpart_name: string; created_at: string }[]) {
+          const c: ContactKey = {
+            userTeam, kind: r.counterpart_kind,
+            counterpartTeam: r.counterpart_team, counterpartName: r.counterpart_name,
+          };
+          const k = keyOf(c);
+          const seen = getLastSeen(c);
+          if (new Date(r.created_at).getTime() > seen) {
+            counts[k] = (counts[k] ?? 0) + 1;
+          }
+        }
+        setUnread(counts);
+      });
+    return () => { cancelled = true; };
+  }, [userTeam, getLastSeen]);
+
 
   useEffect(() => {
     requestAnimationFrame(() => scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight));
