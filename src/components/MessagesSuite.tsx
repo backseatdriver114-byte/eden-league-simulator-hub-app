@@ -558,6 +558,7 @@ export function MessagesSuite() {
               const k: ContactKey = { userTeam, kind: "manager", counterpartTeam: m.team, counterpartName: m.name };
               const active = contact && keyOf(contact) === keyOf(k);
               const rel = state.relations?.[m.team];
+              const n = unread[keyOf(k)] ?? 0;
               return (
                 <li key={m.team}>
                   <button
@@ -567,7 +568,12 @@ export function MessagesSuite() {
                   <span className="truncate">
                     {m.name} <span className="text-muted-foreground">· {m.team}</span>
                   </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">{typeof rel === "number" ? rel.toFixed(0) : "—"}</span>
+                    <span className="flex items-center gap-1.5">
+                      {n > 0 && (
+                        <span className="rounded-full bg-highlight-red px-1.5 text-[10px] font-bold text-white">{n > 9 ? "9+" : n}</span>
+                      )}
+                      <span className="font-mono text-[10px] text-muted-foreground">{typeof rel === "number" ? rel.toFixed(0) : "—"}</span>
+                    </span>
                   </button>
                 </li>
               );
