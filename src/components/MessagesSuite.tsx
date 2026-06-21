@@ -354,7 +354,10 @@ export function MessagesSuite() {
         },
       });
       const reply = await persist("ai", res.reply);
-      if (reply) setRows((r) => [...r, reply]);
+      if (reply) {
+        setRows((r) => [...r, reply]);
+        setLastSeen(contact, new Date(reply.created_at).getTime());
+      }
 
       // Apply effects.
       const volMul = (state.settings?.relationsVolatility ?? 1);
