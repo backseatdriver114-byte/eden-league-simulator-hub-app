@@ -387,11 +387,11 @@ OUTPUT FORMAT — JSON object exactly:
 {
   "exchanges": [ {"question":"...","answer":"..."}, ... ],
   "targets": [
-    {"kind":"team","name":"<valid team>","moraleDelta":<int -15..15>},
-    {"kind":"player","team":"<valid team>","name":"<valid player on that team>","moraleDelta":<int -25..25>},
-    {"kind":"manager","team":"<valid team>","relationDelta":<int -15..15>}
+    {"kind":"team","name":"<valid team>","moraleDelta":<int -20..20>},
+    {"kind":"player","team":"<valid team>","name":"<valid player on that team>","moraleDelta":<int -30..30>},
+    {"kind":"manager","team":"<valid team>","relationDelta":<int -20..20>}
   ],
-  "respectDelta": <number -8..8>,
+  "respectDelta": <number -15..15>,
   "harshness": <number 0..1>,
   "summary": "<one short clause, max 80 chars>"
 }
