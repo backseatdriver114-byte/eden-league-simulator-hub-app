@@ -302,21 +302,21 @@ export const scorePressAnswer = createServerFn({ method: "POST" })
       if (kind === "team") {
         const name = typeof r.name === "string" ? r.name : "";
         if (!validTeams.has(name)) continue;
-        targets.push({ kind, name, moraleDelta: clampDelta(Number(r.moraleDelta), 15) });
+        targets.push({ kind, name, moraleDelta: clampDelta(Number(r.moraleDelta), 20) });
       } else if (kind === "player") {
         const team = typeof r.team === "string" ? r.team : "";
         const name = typeof r.name === "string" ? r.name : "";
         if (!validPlayerKey.has(`${team}::${name}`)) continue;
-        targets.push({ kind, team, name, moraleDelta: clampDelta(Number(r.moraleDelta), 25) });
+        targets.push({ kind, team, name, moraleDelta: clampDelta(Number(r.moraleDelta), 30) });
       } else if (kind === "manager") {
         const team = typeof r.team === "string" ? r.team : "";
         if (!validMgrTeams.has(team)) continue;
-        targets.push({ kind, team, relationDelta: clampDelta(Number(r.relationDelta), 15) });
+        targets.push({ kind, team, relationDelta: clampDelta(Number(r.relationDelta), 20) });
       }
     }
     return {
       targets,
-      respectDelta: clampDelta(Number(parsed.respectDelta), 8),
+      respectDelta: clampDelta(Number(parsed.respectDelta), 15),
       harshness: clamp01(Number(parsed.harshness)),
       summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 120) : "",
     };
@@ -462,22 +462,22 @@ export const runAiPressConference = createServerFn({ method: "POST" })
       if (kind === "team") {
         const name = typeof r.name === "string" ? r.name : "";
         if (!validTeams.has(name)) continue;
-        targets.push({ kind, name, moraleDelta: clampDelta(Number(r.moraleDelta), 15) });
+        targets.push({ kind, name, moraleDelta: clampDelta(Number(r.moraleDelta), 20) });
       } else if (kind === "player") {
         const team = typeof r.team === "string" ? r.team : "";
         const name = typeof r.name === "string" ? r.name : "";
         if (!validPlayerKey.has(`${team}::${name}`)) continue;
-        targets.push({ kind, team, name, moraleDelta: clampDelta(Number(r.moraleDelta), 25) });
+        targets.push({ kind, team, name, moraleDelta: clampDelta(Number(r.moraleDelta), 30) });
       } else if (kind === "manager") {
         const team = typeof r.team === "string" ? r.team : "";
         if (!validMgrTeams.has(team)) continue;
-        targets.push({ kind, team, relationDelta: clampDelta(Number(r.relationDelta), 15) });
+        targets.push({ kind, team, relationDelta: clampDelta(Number(r.relationDelta), 20) });
       }
     }
     return {
       exchanges,
       targets,
-      respectDelta: clampDelta(Number(parsed.respectDelta), 8),
+      respectDelta: clampDelta(Number(parsed.respectDelta), 15),
       harshness: clamp01(Number(parsed.harshness)),
       summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 120) : "",
     };
