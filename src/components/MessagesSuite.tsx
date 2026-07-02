@@ -677,6 +677,21 @@ export function MessagesSuite() {
             </div>
             {error && <div className="mb-2 rounded-lg border-l-4 border-highlight-red bg-background px-3 py-2 text-xs">{error}</div>}
             <div className="flex gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="px-2" disabled={sending} aria-label="Insert emoji">😊</Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto border-0 p-0">
+                  <EmojiPicker
+                    theme={Theme.AUTO}
+                    emojiStyle={EmojiStyle.NATIVE}
+                    onEmojiClick={(e) => setInput((s) => s + e.emoji)}
+                    lazyLoadEmojis
+                    width={320}
+                    height={380}
+                  />
+                </PopoverContent>
+              </Popover>
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
