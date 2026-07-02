@@ -1006,6 +1006,7 @@ interface LeagueContextValue {
   applyPlayerMoraleDelta: (team: string, playerName: string, delta: number) => void;
   applyTeamMoraleDelta: (team: string, delta: number) => void;
   appendPressEntry: (entry: Omit<PressArchiveEntry, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
+  clearPressArchive: () => void;
   standings: StandingRow[];
   leaderboards: Leaderboards;
 }
