@@ -1938,21 +1938,15 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         return { ...prev, settings: merged };
       }),
     revertToVersion: (data) =>
+      // "Save everything" — a version snapshot is now the ENTIRE persistable
+      // LeagueState. Restore it wholesale, preserving only the live undo/redo
+      // stacks and the salaryCap app-setting (which is not league data).
       update((prev) => normalize({
         ...prev,
-        // Team Editor data is intentionally preserved (teams + teamOrder).
-        currentWeek: data.currentWeek ?? prev.currentWeek,
-        season: data.season ?? prev.season,
-        fixtures: data.fixtures ?? prev.fixtures,
-        results: data.results ?? prev.results,
-        payloads: data.payloads ?? prev.payloads,
-        playoffs: data.playoffs,
-        tradeProposals: data.tradeProposals ?? [],
-        freeAgents: data.freeAgents ?? prev.freeAgents,
-        // salaryCap intentionally NOT reverted — it is an app setting, not league data.
-        // Contracts follow the live app (like salaryCap), never the snapshot — a
-        // pre-contracts snapshot must not trigger a salary-resetting re-init.
-        contractsInitialized: prev.contractsInitialized,
+        ...(data as Partial<LeagueState>),
+        salaryCap: prev.salaryCap,
+        undoStack: prev.undoStack,
+        redoStack: prev.redoStack,
       })),
     importLeagueExport: (raw) => {
       if (!raw || typeof raw !== "object") return { ok: false, error: "Not a JSON object." };
@@ -1960,33 +1954,33 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       if (j.kind !== "eden-league-full-export") {
         return { ok: false, error: "File is not an Eden League full export." };
       }
-      if (!Array.isArray(j.teamOrder) || !j.teams || typeof j.teams !== "object") {
+      // New-style export: full state under `state`. Fall back to legacy
+      // top-level fields for older exports (pre "save everything" refactor).
+      const s = (j.state && typeof j.state === "object")
+        ? (j.state as Record<string, unknown>)
+        : j;
+      if (!Array.isArray(s.teamOrder) || !s.teams || typeof s.teams !== "object") {
         return { ok: false, error: "Export is missing teams/teamOrder." };
       }
       try {
-        update((prev) => normalize({
-          ...prev,
-          season: (j.season as number) ?? prev.season,
-          currentWeek: (j.currentWeek as number) ?? prev.currentWeek,
-          salaryCap: (j.salaryCap as number) ?? prev.salaryCap,
-          teamOrder: j.teamOrder as string[],
-          teams: j.teams as LeagueState["teams"],
-          fixtures: (j.fixtures as LeagueState["fixtures"]) ?? [],
-          results: (j.results as LeagueState["results"]) ?? {},
-          // Export key is `matchCommentary`; internal state key is `payloads`.
-          payloads: ((j.matchCommentary ?? j.payloads) as LeagueState["payloads"]) ?? {},
-          playoffs: (j.playoffs as LeagueState["playoffs"]) ?? undefined,
-          tradeProposals: (j.tradeProposals as LeagueState["tradeProposals"]) ?? [],
-          freeAgents: (j.freeAgents as LeagueState["freeAgents"]) ?? [],
-          contractsInitialized: (j.contractsInitialized as boolean | undefined) ?? true,
-          // Restore newer state slices when present (older exports skip these
-          // and fall back to whatever the current state already has).
-          managers: (j.managers as LeagueState["managers"]) ?? prev.managers,
-          relations: (j.relations as LeagueState["relations"]) ?? prev.relations,
-          settings: (j.settings as LeagueState["settings"]) ?? prev.settings,
-          draftPicks: (j.draftPicks as LeagueState["draftPicks"]) ?? prev.draftPicks,
-          draft: (j.draft as LeagueState["draft"]) ?? prev.draft,
-        }));
+        update((prev) => {
+          // "Save everything" — spread the entire snapshot over prev so new
+          // state slices are automatically restored without touching this
+          // file. Preserve live-only stacks and the salaryCap app setting.
+          // Legacy compat: match commentary was once exported as
+          // `matchCommentary`; map it back to `payloads`.
+          const legacyPayloads = (s.matchCommentary && !s.payloads)
+            ? { payloads: s.matchCommentary as LeagueState["payloads"] }
+            : {};
+          return normalize({
+            ...prev,
+            ...(s as Partial<LeagueState>),
+            ...legacyPayloads,
+            salaryCap: prev.salaryCap,
+            undoStack: prev.undoStack,
+            redoStack: prev.redoStack,
+          });
+        });
         return { ok: true };
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : "Import failed." };
