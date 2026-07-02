@@ -220,26 +220,28 @@ You are an analyst rating the on-record press-conference response of a club mana
 
 ABSOLUTE RULES:
 - ONLY reference teams, managers, and players present in the VALID lists provided. If the manager spoke about no one specific, return an empty targets array.
-- Effects are SMALL by default (most answers nudge things ±1 to ±5). Reserve big magnitudes for explicit, pointed remarks.
+- BE DECISIVE. Bland/generic answers get ±0 to ±2. Pointed, memorable, in-character answers should MOVE things — do not default everything to ±1. Use the full range.
 - A manager talking about THEIR OWN team / player carries more weight than talking about a rival's.
 - Praise → positive deltas. Criticism / blame / dismissal → negative deltas. Neutral analysis → no target.
-- Insulting another manager personally → negative relationDelta with that manager's team. Public praise → positive.
+- Insulting another manager personally → strongly negative relationDelta with that manager's team. Public praise → strongly positive.
 - Self-talk or generic banter has NO targets.
-- "respectDelta" is -8..+8 and reflects how the press judges THIS answer specifically. Use the full range:
-    * 0 = forgettable, ±1 = slightly off-key or slightly on-message,
-    * ±2..±3 = clearly sharp or clearly weak,
-    * ±4..±5 = standout — visionary leadership / damning gaffe,
-    * ±6..±8 = career-defining moment — RESERVE FOR EXTREMES: shameless self-promotion, throwing your own players under the bus, personally insulting a rival manager, blaming the referee for a loss, refusing to answer, profanity, a brilliant principled stand, an inspiring rally cry, or genuinely witty class. Do NOT cap at ±3 when the answer truly earns more.
+- "respectDelta" is -15..+15 and reflects how the press and public judge THIS answer. USE THE FULL RANGE — do not cluster around ±1:
+    * 0 = forgettable filler,
+    * ±1..±2 = mildly on/off-key,
+    * ±3..±5 = clearly sharp OR clearly weak (most in-character answers land here or higher),
+    * ±6..±9 = standout — visionary leadership speech / damning gaffe / brutal put-down / genuine class,
+    * ±10..±15 = CAREER-DEFINING — reserved for the extremes: shameless self-promotion, throwing your own stars under the bus, viciously insulting a rival manager by name, blaming refs for a loss, refusing to answer, profanity, an inspiring rally cry, principled stand, or genuinely brilliant wit. Do NOT cap at ±3 or ±5 when the answer truly earns more; if it's the kind of quote that would lead a sports news cycle, score it ±10 or higher.
+- If the answer is genuinely hateful/insulting/reckless, the AI should go NEGATIVE 10+. If it's genuinely inspiring/masterful, POSITIVE 10+. Err toward volatility over safety.
 - "harshness" is 0..1 — 0 = sugary, 0.5 = balanced, 1 = scathing.
 
 OUTPUT FORMAT — JSON object exactly:
 {
   "targets": [
-    {"kind":"team","name":"<valid team>","moraleDelta":<int -15..15>},
-    {"kind":"player","team":"<valid team>","name":"<valid player on that team>","moraleDelta":<int -25..25>},
-    {"kind":"manager","team":"<valid team>","relationDelta":<int -15..15>}
+    {"kind":"team","name":"<valid team>","moraleDelta":<int -20..20>},
+    {"kind":"player","team":"<valid team>","name":"<valid player on that team>","moraleDelta":<int -30..30>},
+    {"kind":"manager","team":"<valid team>","relationDelta":<int -20..20>}
   ],
-  "respectDelta": <number -8..8>,
+  "respectDelta": <number -15..15>,
   "harshness": <number 0..1>,
   "summary": "<one short clause, max 80 chars>"
 }
