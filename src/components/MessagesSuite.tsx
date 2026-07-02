@@ -529,6 +529,22 @@ export function MessagesSuite() {
               {userTeams.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2 w-full text-[10px] font-bold uppercase tracking-wide text-destructive hover:text-destructive"
+            onClick={async () => {
+              if (!userTeam) return;
+              if (!confirm(`Clear ALL message threads (managers, players, and team broadcasts) for ${userTeam}? This cannot be undone.`)) return;
+              await supabase.from("manager_messages").delete().eq("user_team", userTeam);
+              setRows([]);
+              setUnread({});
+              setContact(null);
+              toast("Message archive cleared");
+            }}
+          >
+            🗑 Clear Archive
+          </Button>
         </div>
 
         <div className="rounded-xl border bg-card">
