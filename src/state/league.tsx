@@ -2157,12 +2157,12 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
           summary: entry.summary,
           targets: entry.targets,
         };
-        // Cap the archive at the most recent 500 entries — plenty for AI
-        // grounding without bloating the persisted league row.
         const prevArchive = prev.pressArchive ?? [];
         const nextArchive = [...prevArchive, full].slice(-500);
         return { ...prev, pressArchive: nextArchive };
       }),
+    clearPressArchive: () =>
+      update((prev) => ({ ...prev, pressArchive: [] })),
   };
 
   return <LeagueContext.Provider value={value}>{children}</LeagueContext.Provider>;
