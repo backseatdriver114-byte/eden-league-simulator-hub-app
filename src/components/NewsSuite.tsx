@@ -20,7 +20,7 @@ const TABS: { key: Tab; label: string; blurb: string }[] = [
 ];
 
 export function NewsSuite() {
-  const { state, standings, leaderboards } = useLeague();
+  const { state, standings, leaderboards, clearPressArchive } = useLeague();
   const run = useServerFn(generateNews);
 
   const [tab, setTab] = useState<Tab>("postgame");
@@ -129,9 +129,24 @@ export function NewsSuite() {
               AI managers also hold a short press conference every week behind the scenes.
             </p>
           </div>
-          <Button size="sm" variant="outline" className="font-semibold" onClick={() => setArchiveOpen(true)}>
-            📚 View Press Conference Archives
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" className="font-semibold" onClick={() => setArchiveOpen(true)}>
+              📚 View Press Conference Archives
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="font-semibold text-destructive hover:text-destructive"
+              onClick={() => {
+                const n = state.pressArchive?.length ?? 0;
+                if (n === 0) return;
+                if (!confirm(`Clear ALL ${n} press-conference entries from the archive? This cannot be undone and AI features will no longer be able to reference these quotes.`)) return;
+                clearPressArchive();
+              }}
+            >
+              🗑 Clear Archive
+            </Button>
+          </div>
         </div>
 
           <div className="mt-3 flex flex-wrap gap-2">

@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 
 interface ContactKey {
   userTeam: string;
@@ -527,6 +529,22 @@ export function MessagesSuite() {
               {userTeams.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
             </SelectContent>
           </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2 w-full text-[10px] font-bold uppercase tracking-wide text-destructive hover:text-destructive"
+            onClick={async () => {
+              if (!userTeam) return;
+              if (!confirm(`Clear ALL message threads (managers, players, and team broadcasts) for ${userTeam}? This cannot be undone.`)) return;
+              await supabase.from("manager_messages").delete().eq("user_team", userTeam);
+              setRows([]);
+              setUnread({});
+              setContact(null);
+              toast("Message archive cleared");
+            }}
+          >
+            🗑 Clear Archive
+          </Button>
         </div>
 
         <div className="rounded-xl border bg-card">
@@ -659,6 +677,21 @@ export function MessagesSuite() {
             </div>
             {error && <div className="mb-2 rounded-lg border-l-4 border-highlight-red bg-background px-3 py-2 text-xs">{error}</div>}
             <div className="flex gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button type="button" variant="outline" className="px-2" disabled={sending} aria-label="Insert emoji">😊</Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-auto border-0 p-0">
+                  <EmojiPicker
+                    theme={Theme.AUTO}
+                    emojiStyle={EmojiStyle.NATIVE}
+                    onEmojiClick={(e) => setInput((s) => s + e.emoji)}
+                    lazyLoadEmojis
+                    width={320}
+                    height={380}
+                  />
+                </PopoverContent>
+              </Popover>
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
