@@ -20,7 +20,7 @@ const TABS: { key: Tab; label: string; blurb: string }[] = [
 ];
 
 export function NewsSuite() {
-  const { state, standings, leaderboards } = useLeague();
+  const { state, standings, leaderboards, clearPressArchive } = useLeague();
   const run = useServerFn(generateNews);
 
   const [tab, setTab] = useState<Tab>("postgame");
