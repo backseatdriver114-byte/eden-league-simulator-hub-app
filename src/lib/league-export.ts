@@ -1,6 +1,9 @@
 // League data export + version-snapshot helpers.
-// Exports produce downloadable JSON; version snapshots capture all league data
-// EXCEPT Team Editor data (rosters, budgets, formations/lineups, player attrs).
+//
+// PHILOSOPHY: "save everything". Rather than hand-listing which slices of
+// LeagueState to snapshot, we serialize the WHOLE state (minus session-only
+// undo/redo stacks). New league features automatically flow through the
+// export/import/version-restore pipeline without any change to this file.
 import type {
   LeagueState, StandingRow, Leaderboards, FixtureEntry,
 } from "@/state/league";
@@ -19,7 +22,6 @@ export function downloadJson(filename: string, data: unknown) {
   URL.revokeObjectURL(url);
 }
 
-// Generic browser download for plain text / markdown content.
 export function downloadText(filename: string, content: string, mime = "text/markdown") {
   const blob = new Blob([content], { type: `${mime};charset=utf-8` });
   const url = URL.createObjectURL(blob);
@@ -35,9 +37,6 @@ export function downloadText(filename: string, content: string, mime = "text/mar
 const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
 
 // ---------------- Private DM row shape ----------------
-// Mirrors the `manager_messages` Supabase table. Included in the full export so
-// async messaging history (DMs with AI managers and own players) survives a
-// re-import / cross-project copy.
 export interface ManagerMessageRow {
   user_team: string;
   counterpart_kind: string;
@@ -60,8 +59,6 @@ export async function fetchManagerMessages(): Promise<ManagerMessageRow[]> {
   return ((data as unknown) as ManagerMessageRow[]) ?? [];
 }
 
-// Wipe the manager_messages table and re-insert the rows from an import.
-// Called after a successful league import so DM history matches the snapshot.
 export async function restoreManagerMessages(rows: ManagerMessageRow[]): Promise<void> {
   await supabase.from("manager_messages").delete().neq("user_team", "__none__");
   if (!rows.length) return;
@@ -81,38 +78,30 @@ export async function restoreManagerMessages(rows: ManagerMessageRow[]): Promise
   }
 }
 
-// ---------------- Full league export ----------------
-// Everything in LeagueState plus the Cloud-only DM history.
+// ---------------- Full league export ("save everything") ----------------
+// Serializes the ENTIRE LeagueState (minus undo/redo) plus Cloud-only DM
+// history. Any new state slice is automatically included without editing
+// this function.
 export function buildLeagueExport(
   state: LeagueState,
   standings: StandingRow[],
   leaderboards: Leaderboards,
   messages: ManagerMessageRow[] = [],
 ) {
+  // Strip session-only stacks; keep everything else verbatim.
+  const { undoStack: _u, redoStack: _r, ...persistable } = state;
+  void _u; void _r;
   return {
     exportedAt: new Date().toISOString(),
     kind: "eden-league-full-export",
+    // Full state snapshot — the primary payload used on import.
+    state: persistable,
+    // Convenience mirrors of common fields at the top level for older tooling.
     season: state.season,
     currentWeek: state.currentWeek,
-    salaryCap: state.salaryCap,
-    teamOrder: state.teamOrder,
-    teams: state.teams,
-    fixtures: state.fixtures,
-    results: state.results,
-    matchCommentary: state.payloads,
-    playoffs: state.playoffs ?? null,
-    tradeProposals: state.tradeProposals,
-    freeAgents: state.freeAgents,
-    contractsInitialized: state.contractsInitialized,
-    // --- newer state slices (managers + respect/harshness, relations,
-    //     editable engine settings, draft picks & live draft) ---
-    managers: state.managers,
-    relations: state.relations ?? {},
-    settings: state.settings ?? null,
-    draftPicks: state.draftPicks,
-    draft: state.draft ?? null,
-    // --- DM history (lives in Cloud, not in LeagueState) ---
+    // DM history (lives in Cloud, not in LeagueState).
     messages,
+    // Derived views (not restored on import, useful for external readers).
     standings,
     goldenBoot: leaderboards.scorers,
     assistLeaders: leaderboards.assists,
@@ -133,8 +122,6 @@ export async function downloadLeagueExport(
 }
 
 // ---------------- Single-week export ----------------
-// Results + match commentary for one week, plus a snapshot of all current
-// Team Editor data (rosters/budgets/lineups) at the moment of export.
 export function buildWeekExport(state: LeagueState, week: number) {
   const weekFixtures = state.fixtures.filter((f) => f.week === week);
   const matches = weekFixtures.map((f: FixtureEntry) => ({
@@ -167,31 +154,13 @@ export function downloadWeekExport(state: LeagueState, week: number) {
   downloadJson(`eden-league-S${state.season}-week-${week}-${stamp()}`, buildWeekExport(state, week));
 }
 
-// ---------------- Version snapshots (Team Editor data EXCLUDED) ----------------
-export interface VersionData {
-  currentWeek: number;
-  season: number;
-  fixtures: LeagueState["fixtures"];
-  results: LeagueState["results"];
-  payloads: LeagueState["payloads"];
-  playoffs: LeagueState["playoffs"];
-  tradeProposals: LeagueState["tradeProposals"];
-  freeAgents: LeagueState["freeAgents"];
-  contractsInitialized: boolean;
-  // NOTE: salaryCap is an app setting (Settings suite), NOT league data, so it
-  // is intentionally excluded from snapshots — reverting never changes it.
-}
+// ---------------- Version snapshots ----------------
+// A saved version is now a FULL LeagueState snapshot (minus undo/redo).
+// Reverting restores the entire league exactly as it was.
+export type VersionData = Omit<LeagueState, "undoStack" | "redoStack">;
 
 export function extractVersionData(state: LeagueState): VersionData {
-  return {
-    currentWeek: state.currentWeek,
-    season: state.season,
-    fixtures: state.fixtures,
-    results: state.results,
-    payloads: state.payloads,
-    playoffs: state.playoffs,
-    tradeProposals: state.tradeProposals,
-    freeAgents: state.freeAgents,
-    contractsInitialized: state.contractsInitialized,
-  };
+  const { undoStack: _u, redoStack: _r, ...rest } = state;
+  void _u; void _r;
+  return rest;
 }
