@@ -29,7 +29,7 @@ export type PressTarget = PressTargetTeam | PressTargetPlayer | PressTargetManag
 
 export interface PressScoreResult {
   targets: PressTarget[];
-  respectDelta: number; // -3..+3
+  respectDelta: number; // -15..+15
   harshness: number;    // 0..1
   summary: string;      // short headline-style summary
 }
