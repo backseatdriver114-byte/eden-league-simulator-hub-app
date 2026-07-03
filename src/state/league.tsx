@@ -1704,9 +1704,11 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     setFormation: (team, formation) =>
       update((prev) => {
         const t = prev.teams[team];
-        const slots = buildLineupSlots(formation);
-        const oldLineup = t.lineup;
-        const lineup = slots.map((_, i) => oldLineup[i] ?? "");
+        // Position-aware remap: keep the same starters on the pitch when
+        // possible, but slot each one into the role in the NEW formation that
+        // best matches their listed position (LB → LB, CB → CB, ST → ST,
+        // etc.). Prevents auto-fill from scrambling the XI on a formation tweak.
+        const lineup = remapLineupForFormation(t.players, t.lineup, formation);
         return { ...prev, teams: { ...prev.teams, [team]: syncStarters({ ...t, formation, lineup }) } };
       }),
     autoFillLineup: (team) =>
