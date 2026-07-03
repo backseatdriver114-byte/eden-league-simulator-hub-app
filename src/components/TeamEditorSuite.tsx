@@ -83,13 +83,32 @@ export function TeamEditorSuite() {
   const t = state.teams[team];
   if (!t) return null;
 
+  const isUserClub = isContractExempt(team);
+  const isUserManager = (manager?.personality ?? "").trim().toUpperCase() === "USER CONTROLLED";
+  // User-controlled managers CANNOT have a personality typed in — the AI
+  // derives one behind the scenes from their actual behaviour (press quotes,
+  // messages). So the textarea is locked to "USER CONTROLLED" for them.
   const mgrDirty =
-    mgrNameDraft !== (manager?.name ?? "") || mgrDescDraft !== (manager?.personality ?? "");
-  function saveManager() {
-    replaceManager(team, { name: mgrNameDraft.trim(), personality: mgrDescDraft.trim() });
+    mgrNameDraft !== (manager?.name ?? "") ||
+    (!isUserManager && mgrDescDraft !== (manager?.personality ?? ""));
+  function fireAndHire() {
+    const nextName = mgrNameDraft.trim();
+    if (!nextName) return;
+    const wasName = manager?.name ?? "";
+    if (nextName === wasName) return; // no-op — button only fires on a real change
+    if (!confirm(
+      `FIRE ${wasName || "the current manager"} and HIRE ${nextName}?\n\n` +
+      `This is a PUBLIC action. It will:\n` +
+      `  • Reset respect to 50 and harshness to 0.5\n` +
+      `  • Reset team and player morale to baseline\n` +
+      `  • Clear every rival club's relationship rating with ${team}\n` +
+      `  • Wipe DM history for ${team}\n` +
+      `  • Get talked about in the press and around the league.`
+    )) return;
+    const personality = isUserManager ? "USER CONTROLLED" : (mgrDescDraft.trim() || manager?.personality ?? "");
+    fireAndHireManager(team, { name: nextName, personality });
   }
 
-  const isUserClub = isContractExempt(team);
   const payroll = t.players.reduce((s, p) => s + (p.salary ?? 0), 0);
   const slots = buildLineupSlots(t.formation);
   const starterCount = t.lineup.filter((n) => {
