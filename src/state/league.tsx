@@ -1134,11 +1134,28 @@ interface LeagueContextValue {
   // Relations + manager respect/harshness mutators (Press Conferences + DMs)
   applyRelationDelta: (aiTeam: string, delta: number) => void;
   applyManagerRespectDelta: (team: string, delta: number) => void;
+  // Same as applyManagerRespectDelta but uses the separate pressConferenceVolatility
+  // multiplier — press-conference respect swings are tuned independently from
+  // match-results / standings drift so the user can make interviews as
+  // consequential as they want without changing the whole season's rhythm.
+  applyPressRespectDelta: (team: string, delta: number) => void;
   applyManagerHarshnessSample: (team: string, sample: number) => void;
   applyPlayerMoraleDelta: (team: string, playerName: string, delta: number) => void;
   applyTeamMoraleDelta: (team: string, delta: number) => void;
   appendPressEntry: (entry: Omit<PressArchiveEntry, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
   clearPressArchive: () => void;
+  // Media article archive (auto-filed after every Newsroom generation).
+  appendArticleEntry: (entry: Omit<ArticleArchiveEntry, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
+  clearArticleArchive: () => void;
+  // Public league events (used by press / news / rivals to reference sackings).
+  appendLeagueEvent: (event: Omit<LeagueEvent, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
+  // "Fire manager and hire new" — a full public reset of everything tied to
+  // a manager slot (used by the Team Editor Suite). Resets respect, harshness,
+  // team & player morale, wipes DM history (client-side + Supabase, best
+  // effort), clears relations from other clubs, logs a league event.
+  fireAndHireManager: (team: string, incoming: { name: string; personality: string }) => void;
+  // AI sacking (invoked by AiSackingWatcher after the boardroom review call).
+  sackAiManager: (team: string, reason?: string) => void;
   standings: StandingRow[];
   leaderboards: Leaderboards;
 }
