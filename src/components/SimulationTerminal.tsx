@@ -10,9 +10,14 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 
-const TEMPO_MAP = [1.0, 1.2, 1.4];
-const TEMPO_LABEL = ["Slow", "Normal", "Fast"];
-const defaultTempoIdx = () => Math.max(0, TEMPO_MAP.indexOf(settings.defaultTempo));
+// Continuous tempo range (0.1× – 2.0×). The old 3-option preset (Slow/Normal/
+// Fast) was replaced with a free-form slider so users can dial in any pace.
+const TEMPO_MIN = 0.1;
+const TEMPO_MAX = 2.0;
+const TEMPO_STEP = 0.05;
+const clampTempo = (v: number) => Math.max(TEMPO_MIN, Math.min(TEMPO_MAX, Math.round(v * 100) / 100));
+const tempoLabel = (v: number) => (v <= 0.9 ? "Slow" : v >= 1.4 ? "Fast" : "Normal");
+const defaultTempo = () => clampTempo(settings.defaultTempo);
 
 interface Props {
   initialHome?: string;
