@@ -166,6 +166,13 @@ export interface LeagueState {
   // is recorded here so AI features (future press questions, news articles,
   // DM replies) can reference what the manager actually said on the record.
   pressArchive?: PressArchiveEntry[];
+  // Media Article archive. Every article the Newsroom writes is auto-filed
+  // here so users can revisit past coverage and (later) so AI features can
+  // reference the league's own news history.
+  articleArchive?: ArticleArchiveEntry[];
+  // Public league events (managerial sackings, hires). Small notes the
+  // press/AI can reference. Capped to a rolling window.
+  leagueEvents?: LeagueEvent[];
 }
 
 export interface PressArchiveEntry {
@@ -180,6 +187,27 @@ export interface PressArchiveEntry {
   summary?: string;      // AI-scored one-clause headline (optional)
   targets?: { kind: "team" | "player" | "manager"; team?: string; name?: string }[];
   createdAt: string;     // ISO timestamp
+}
+
+export interface ArticleArchiveEntry {
+  id: string;
+  season: number;
+  week: number;
+  kind: "postgame" | "roundup" | "drama";
+  title: string;         // first line / headline extract
+  body: string;          // full markdown article
+  focus?: string;        // reader-supplied angle, if any
+  createdAt: string;     // ISO timestamp
+}
+
+export interface LeagueEvent {
+  id: string;
+  season: number;
+  week: number;
+  kind: "manager_fired" | "manager_hired" | "fire_and_hire";
+  team: string;
+  detail: string;        // human-readable summary
+  createdAt: string;
 }
 
 export interface StandingRow {
@@ -228,37 +256,141 @@ export function isValidFormation(f: string): boolean {
 }
 
 // Slots: a GK slot (line 0) plus one generic outfield slot per formation unit.
-// Any player may fill any outfield slot, so the group is "OUT".
-export interface LineupSlot { group: PosGroup | "OUT"; label: string; line: number; }
+// Each slot now carries an `idealPosition` label (CB / LB / CM / ST / …)
+// derived from the row (defense/midfield/attack) and lateral offset so
+// auto-fill and formation-change re-mapping can place players by ROLE.
+export interface LineupSlot { group: PosGroup | "OUT"; label: string; line: number; idealPosition: string; }
+
+// Position labels for each slot in a given formation row, left → right.
+function idealPositionsForRow(rowIdx: number, count: number, totalOutfieldRows: number): string[] {
+  const isFirst = rowIdx === 0; // back line
+  const isLast = rowIdx === totalOutfieldRows - 1; // front line
+  const out: string[] = [];
+  if (isFirst) {
+    if (count === 1) return ["CB"];
+    if (count === 2) return ["LB", "RB"];
+    if (count === 3) return ["LB", "CB", "RB"];
+    if (count === 4) return ["LB", "CB", "CB", "RB"];
+    out.push("LB");
+    for (let i = 0; i < count - 2; i++) out.push("CB");
+    out.push("RB");
+    return out;
+  }
+  if (isLast) {
+    if (count === 1) return ["ST"];
+    if (count === 2) return ["LW", "RW"];
+    if (count === 3) return ["LW", "ST", "RW"];
+    out.push("LW");
+    for (let i = 0; i < count - 2; i++) out.push("ST");
+    out.push("RW");
+    return out;
+  }
+  // Middle row(s): choose CDM (near back), CM (middle), CAM (near front).
+  const rel = totalOutfieldRows <= 2 ? 0.5 : rowIdx / (totalOutfieldRows - 1);
+  const centerPos = rel < 0.4 ? "CDM" : rel > 0.6 ? "CAM" : "CM";
+  if (count === 1) return [centerPos];
+  if (count === 2) return [centerPos, centerPos];
+  if (count === 3) return ["LM", centerPos, "RM"];
+  if (count === 4) return ["LM", centerPos, centerPos, "RM"];
+  out.push("LM");
+  for (let i = 0; i < count - 2; i++) out.push(centerPos);
+  out.push("RM");
+  return out;
+}
+
 export function buildLineupSlots(formation: string): LineupSlot[] {
   const rows = parseFormation(formation);
-  const slots: LineupSlot[] = [{ group: "GK", label: "GK", line: 0 }];
+  const slots: LineupSlot[] = [{ group: "GK", label: "GK", line: 0, idealPosition: "GK" }];
   rows.forEach((count, r) => {
+    const ideals = idealPositionsForRow(r, count, rows.length);
     for (let i = 0; i < count; i++) {
-      slots.push({ group: "OUT", label: `${r + 1}.${i + 1}`, line: r + 1 });
+      slots.push({ group: "OUT", label: `${r + 1}.${i + 1}`, line: r + 1, idealPosition: ideals[i] ?? "CM" });
     }
   });
   return slots;
 }
 
-// Pick a sensible default lineup from the available roster. The GK slot prefers a
-// goalkeeper; every other slot takes the highest-rated remaining healthy player.
+// Pick a sensible default lineup that RESPECTS each player's listed position.
+// Greedy best-fit: iterate slots in order of specificity (GK → wide roles →
+// specialised centers → generic CM/ST) and for each slot pick the highest-
+// scoring unused, healthy player, where score blends positional fit (dominant)
+// with rating (tiebreaker). Falls back to any healthy player, then any player,
+// so no slot is ever left empty when a warm body is available.
 export function buildDefaultLineup(players: LeaguePlayer[], formation: string): string[] {
   const slots = buildLineupSlots(formation);
+  return assignPlayersToSlots(slots, players, []);
+}
+
+// Slot fill priority: GK first, then the roles hardest to substitute (fullbacks,
+// wingers, out-and-out wide mids), then specialised centres, then generic ones.
+const SLOT_PRIORITY: Record<string, number> = {
+  GK: 0, LB: 1, RB: 1, LWB: 1, RWB: 1, LW: 2, RW: 2, LM: 3, RM: 3,
+  CDM: 4, CAM: 4, CB: 5, ST: 6, CM: 7,
+};
+function slotPriority(pos: string): number {
+  return SLOT_PRIORITY[(pos || "").toUpperCase()] ?? 8;
+}
+
+// Greedy position-aware slot assignment. `preferred` lets a caller pass names
+// that should be prioritised for consideration first (used by formation
+// remap to preserve current starters).
+function assignPlayersToSlots(
+  slots: LineupSlot[],
+  players: LeaguePlayer[],
+  preferred: string[],
+): string[] {
+  const lineup: string[] = slots.map(() => "");
   const used = new Set<string>();
-  const ranked = [...players].sort((a, b) => b.rating - a.rating);
-  const lineup: string[] = [];
-  for (const slot of slots) {
+  const order = slots
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => slotPriority(a.s.idealPosition) - slotPriority(b.s.idealPosition));
+
+  const scorePlayerForSlot = (p: LeaguePlayer, slot: LineupSlot): number => {
+    const fit = positionSimilarity(slot.idealPosition, p.position);
+    const boost = preferred.includes(p.name) ? 0.5 : 0;
+    // Position fit dominates; rating breaks ties between similarly-fit players.
+    return fit * 10 + boost + p.rating * 0.5;
+  };
+
+  for (const { s, i } of order) {
     let pick: LeaguePlayer | undefined;
-    if (slot.group === "GK") {
-      pick = ranked.find((p) => !used.has(p.name) && !isPlayerOut(p) && positionGroup(p.position) === "GK");
+    let pickScore = -Infinity;
+    for (const p of players) {
+      if (used.has(p.name)) continue;
+      if (isPlayerOut(p)) continue;
+      // GK slots demand a keeper (positionSimilarity already returns 0 across the GK gap).
+      if (s.group === "GK" && positionGroup(p.position) !== "GK") continue;
+      if (s.group !== "GK" && positionGroup(p.position) === "GK") continue;
+      const sc = scorePlayerForSlot(p, s);
+      if (sc > pickScore) { pickScore = sc; pick = p; }
     }
-    if (!pick) pick = ranked.find((p) => !used.has(p.name) && !isPlayerOut(p));
-    if (!pick) pick = ranked.find((p) => !used.has(p.name));
-    if (pick) { used.add(pick.name); lineup.push(pick.name); }
-    else lineup.push("");
+    // Fallbacks so slots don't stay empty for depleted squads.
+    if (!pick) {
+      pick = players.find((p) => !used.has(p.name) && !isPlayerOut(p));
+    }
+    if (!pick) pick = players.find((p) => !used.has(p.name));
+    if (pick) { used.add(pick.name); lineup[i] = pick.name; }
   }
   return lineup;
+}
+
+// Formation change: preserve current starters as much as possible, then let
+// them settle into the closest matching role in the new formation. Reserves
+// stay on the bench unless a starter has no natural fit (in which case a
+// better-fit bench player can be promoted).
+export function remapLineupForFormation(
+  players: LeaguePlayer[],
+  oldLineup: string[],
+  newFormation: string,
+): string[] {
+  const newSlots = buildLineupSlots(newFormation);
+  const starterNames = oldLineup.filter(Boolean);
+  const starters = players.filter((p) => starterNames.includes(p.name));
+  const bench = players.filter((p) => !starterNames.includes(p.name));
+  // Try to place only current starters first — this is what preserves the
+  // "same 9 on the pitch" feel across a formation tweak.
+  const pool = [...starters, ...bench]; // starters get first crack via the preferred boost
+  return assignPlayersToSlots(newSlots, pool, starterNames);
 }
 
 // Re-derive each player's `starter` flag from the team lineup.
@@ -1002,11 +1134,28 @@ interface LeagueContextValue {
   // Relations + manager respect/harshness mutators (Press Conferences + DMs)
   applyRelationDelta: (aiTeam: string, delta: number) => void;
   applyManagerRespectDelta: (team: string, delta: number) => void;
+  // Same as applyManagerRespectDelta but uses the separate pressConferenceVolatility
+  // multiplier — press-conference respect swings are tuned independently from
+  // match-results / standings drift so the user can make interviews as
+  // consequential as they want without changing the whole season's rhythm.
+  applyPressRespectDelta: (team: string, delta: number) => void;
   applyManagerHarshnessSample: (team: string, sample: number) => void;
   applyPlayerMoraleDelta: (team: string, playerName: string, delta: number) => void;
   applyTeamMoraleDelta: (team: string, delta: number) => void;
   appendPressEntry: (entry: Omit<PressArchiveEntry, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
   clearPressArchive: () => void;
+  // Media article archive (auto-filed after every Newsroom generation).
+  appendArticleEntry: (entry: Omit<ArticleArchiveEntry, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
+  clearArticleArchive: () => void;
+  // Public league events (used by press / news / rivals to reference sackings).
+  appendLeagueEvent: (event: Omit<LeagueEvent, "id" | "createdAt"> & { id?: string; createdAt?: string }) => void;
+  // "Fire manager and hire new" — a full public reset of everything tied to
+  // a manager slot (used by the Team Editor Suite). Resets respect, harshness,
+  // team & player morale, wipes DM history (client-side + Supabase, best
+  // effort), clears relations from other clubs, logs a league event.
+  fireAndHireManager: (team: string, incoming: { name: string; personality: string }) => void;
+  // AI sacking (invoked by AiSackingWatcher after the boardroom review call).
+  sackAiManager: (team: string, reason?: string) => void;
   standings: StandingRow[];
   leaderboards: Leaderboards;
 }
@@ -1236,24 +1385,21 @@ function applyRespectTick(state: LeagueState): LeagueState {
     }
     const cur = typeof m.respect === "number" ? m.respect : 50;
     const midpoint = (total + 1) / 2;
-    const tilt = (midpoint - rankOf(name)) * (22 / midpoint);
+    // Standings weight: the base tilt magnitude used to be 22 (a top-of-table
+    // manager pulled toward ~72). Multiply by standingsWeight so match
+    // results/standings clearly dominate weekly respect drift — leading the
+    // table gets you noticeably more respect than a middle-of-the-pack finish.
+    const standingsWeight = state.settings?.standingsWeight ?? 1;
+    const tilt = (midpoint - rankOf(name)) * ((22 * standingsWeight) / midpoint);
     const target = 50 + tilt;
-    let next = cur + (target - cur) * 0.15;
+    // Bumped pull rate from 0.15 → 0.22 so standings matter more per week too.
+    let next = cur + (target - cur) * 0.22;
     const harsh = typeof m.harshness === "number" ? m.harshness : 0.5;
     const dev = Math.abs(harsh - 0.5);
     if (dev > 0.25) next -= (dev - 0.25) * 6;
     next = Math.max(0, Math.min(100, cur + (next - cur) * mult));
-    // Respect-driven sacking: fire the manager when respect collapses.
-    if (next < sackAt && !isContractExempt(name)) {
-      const teamObj = teams[name];
-      if (teamObj) {
-        const clone = { ...teamObj, players: [...teamObj.players] };
-        triggerManagerSack(clone);
-        teams[name] = clone;
-      }
-      next = 55; // new-manager respect bounce
-      changed = true;
-    }
+    // Sacking is NOT auto-triggered here anymore — AiSackingWatcher runs a
+    // multi-factor boardroom review each week and calls sackAiManager().
     if (Math.abs(next - cur) > 0.05) changed = true;
     managers[name] = { ...m, respect: Math.round(next * 10) / 10 };
   }
@@ -1572,9 +1718,11 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
     setFormation: (team, formation) =>
       update((prev) => {
         const t = prev.teams[team];
-        const slots = buildLineupSlots(formation);
-        const oldLineup = t.lineup;
-        const lineup = slots.map((_, i) => oldLineup[i] ?? "");
+        // Position-aware remap: keep the same starters on the pitch when
+        // possible, but slot each one into the role in the NEW formation that
+        // best matches their listed position (LB → LB, CB → CB, ST → ST,
+        // etc.). Prevents auto-fill from scrambling the XI on a formation tweak.
+        const lineup = remapLineupForFormation(t.players, t.lineup, formation);
         return { ...prev, teams: { ...prev.teams, [team]: syncStarters({ ...t, formation, lineup }) } };
       }),
     autoFillLineup: (team) =>
@@ -2096,19 +2244,22 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         if (!m) return prev;
         const cur = typeof m.respect === "number" ? m.respect : 50;
         const mult = (prev.settings ?? getSettings()).managerRatingVolatility ?? 1;
-        const sackAt = (prev.settings ?? getSettings()).sackThreshold ?? 25;
-        let next = clampRespect(cur + delta * mult);
-        const teams = { ...prev.teams };
-        if (next < sackAt && !isContractExempt(team) && (m.personality ?? "").trim().toUpperCase() !== "USER CONTROLLED") {
-          const t = teams[team];
-          if (t) {
-            const clone = { ...t, players: [...t.players] };
-            triggerManagerSack(clone);
-            teams[team] = clone;
-          }
-          next = 55;
-        }
-        return { ...prev, teams, managers: { ...prev.managers, [team]: { ...m, respect: next } } };
+        // NOTE: sacking is no longer triggered here. AI sackings are decided
+        // once per week by the AiSackingWatcher (boardroom review) so respect
+        // dips don't automatically fire someone mid-flow.
+        const next = clampRespect(cur + delta * mult);
+        return { ...prev, managers: { ...prev.managers, [team]: { ...m, respect: next } } };
+      }),
+    applyPressRespectDelta: (team, delta) =>
+      update((prev) => {
+        const m = prev.managers?.[team];
+        if (!m) return prev;
+        const cur = typeof m.respect === "number" ? m.respect : 50;
+        // Uses the DEDICATED press-conference volatility multiplier so the
+        // user can crank interview stakes without changing weekly match drift.
+        const mult = (prev.settings ?? getSettings()).pressConferenceVolatility ?? 1;
+        const next = clampRespect(cur + delta * mult);
+        return { ...prev, managers: { ...prev.managers, [team]: { ...m, respect: next } } };
       }),
     applyManagerHarshnessSample: (team, sample) =>
       update((prev) => {
@@ -2157,6 +2308,118 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       }),
     clearPressArchive: () =>
       update((prev) => ({ ...prev, pressArchive: [] })),
+    appendArticleEntry: (entry) =>
+      update((prev) => {
+        const full: ArticleArchiveEntry = {
+          id: entry.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `article-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+          createdAt: entry.createdAt ?? new Date().toISOString(),
+          season: entry.season,
+          week: entry.week,
+          kind: entry.kind,
+          title: entry.title,
+          body: entry.body,
+          focus: entry.focus,
+        };
+        const prevArchive = prev.articleArchive ?? [];
+        // Cap at 500 to mirror the press archive so exports stay reasonable.
+        const nextArchive = [...prevArchive, full].slice(-500);
+        return { ...prev, articleArchive: nextArchive };
+      }),
+    clearArticleArchive: () =>
+      update((prev) => ({ ...prev, articleArchive: [] })),
+    appendLeagueEvent: (event) =>
+      update((prev) => {
+        const full: LeagueEvent = {
+          id: event.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+          createdAt: event.createdAt ?? new Date().toISOString(),
+          season: event.season,
+          week: event.week,
+          kind: event.kind,
+          team: event.team,
+          detail: event.detail,
+        };
+        const prev2 = prev.leagueEvents ?? [];
+        return { ...prev, leagueEvents: [...prev2, full].slice(-300) };
+      }),
+    sackAiManager: (team, reason) =>
+      update((prev) => {
+        const t = prev.teams[team];
+        const m = prev.managers?.[team];
+        if (!t || !m) return prev;
+        if ((m.personality ?? "").trim().toUpperCase() === "USER CONTROLLED") return prev;
+        if (isContractExempt(team)) return prev;
+        const clone = { ...t, players: [...t.players] };
+        triggerManagerSack(clone);
+        const evt: LeagueEvent = {
+          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          season: prev.season,
+          week: prev.currentWeek,
+          kind: "manager_fired",
+          team,
+          detail: reason
+            ? `${m.name} was sacked by ${team}. Boardroom review: ${reason.slice(0, 160)}`
+            : `${m.name} was sacked by ${team} following a boardroom review.`,
+        };
+        return {
+          ...prev,
+          teams: { ...prev.teams, [team]: clone },
+          managers: { ...prev.managers, [team]: { ...m, respect: 55 } },
+          leagueEvents: [...(prev.leagueEvents ?? []), evt].slice(-300),
+        };
+      }),
+    fireAndHireManager: (team, incoming) =>
+      update((prev) => {
+        const t = prev.teams[team];
+        if (!t) return prev;
+        const outgoing = prev.managers?.[team];
+        const outgoingName = outgoing?.name ?? "the previous manager";
+        const baselineMorale = (prev.settings ?? getSettings()).moraleBaseline ?? 60;
+        // 1) Reset team + player morale to the configured baseline.
+        const players = t.players.map((p) => ({ ...p, morale: baselineMorale }));
+        // 2) Reset manager row: new identity, neutral respect, neutral tone.
+        const nextManager = {
+          ...(outgoing ?? {}),
+          name: incoming.name.trim() || outgoingName,
+          personality: incoming.personality,
+          respect: 50,
+          harshness: 0.5,
+        } as typeof outgoing extends undefined ? Record<string, unknown> : NonNullable<typeof outgoing>;
+        // 3) Wipe every OTHER club's stored relation TOWARD this team so
+        //    ratings reset with the new hire.
+        const relations = { ...(prev.relations ?? {}) };
+        for (const key of Object.keys(relations)) {
+          if (key === team || key.includes(team)) delete relations[key];
+        }
+        // 4) Fire-and-forget wipe of DM history in Supabase for this team.
+        //    Non-blocking on purpose — UI updates immediately and the network
+        //    call cleans up in the background. If it fails, MessagesSuite's
+        //    manual "Clear Archive" button remains available as a fallback.
+        try {
+          supabase.from("manager_messages").delete().eq("user_team", team).then(() => {}, () => {});
+        } catch { /* ignore — offline is fine, local state already reset */ }
+        // 5) Log a public league event so press/AI can reference the shake-up.
+        const evt: LeagueEvent = {
+          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          season: prev.season,
+          week: prev.currentWeek,
+          kind: "fire_and_hire",
+          team,
+          detail: `${team} fired ${outgoingName} and hired ${nextManager.name}.`,
+        };
+        return {
+          ...prev,
+          teams: { ...prev.teams, [team]: { ...t, morale: baselineMorale, players } },
+          managers: { ...(prev.managers ?? {}), [team]: nextManager },
+          relations,
+          leagueEvents: [...(prev.leagueEvents ?? []), evt].slice(-300),
+        };
+      }),
   };
 
   return <LeagueContext.Provider value={value}>{children}</LeagueContext.Provider>;

@@ -50,7 +50,7 @@ export function TeamEditorSuite() {
     state, updateBudget, updatePlayer,
     setInjuryWeeks, setSuspensionWeeks, addPlayer, removePlayer, renameTeam,
     setLineupSlot, setFormation, autoFillLineup, setTacticalStyle,
-    replaceManager, setPlayerForSale,
+    replaceManager, fireAndHireManager, setPlayerForSale,
   } = useLeague();
   const { consumePayload } = useNavigation();
   const [team, setTeam] = useState(state.teamOrder[0]);
@@ -83,13 +83,32 @@ export function TeamEditorSuite() {
   const t = state.teams[team];
   if (!t) return null;
 
+  const isUserClub = isContractExempt(team);
+  const isUserManager = (manager?.personality ?? "").trim().toUpperCase() === "USER CONTROLLED";
+  // User-controlled managers CANNOT have a personality typed in — the AI
+  // derives one behind the scenes from their actual behaviour (press quotes,
+  // messages). So the textarea is locked to "USER CONTROLLED" for them.
   const mgrDirty =
-    mgrNameDraft !== (manager?.name ?? "") || mgrDescDraft !== (manager?.personality ?? "");
-  function saveManager() {
-    replaceManager(team, { name: mgrNameDraft.trim(), personality: mgrDescDraft.trim() });
+    mgrNameDraft !== (manager?.name ?? "") ||
+    (!isUserManager && mgrDescDraft !== (manager?.personality ?? ""));
+  function fireAndHire() {
+    const nextName = mgrNameDraft.trim();
+    if (!nextName) return;
+    const wasName = manager?.name ?? "";
+    if (nextName === wasName) return; // no-op — button only fires on a real change
+    if (!confirm(
+      `FIRE ${wasName || "the current manager"} and HIRE ${nextName}?\n\n` +
+      `This is a PUBLIC action. It will:\n` +
+      `  • Reset respect to 50 and harshness to 0.5\n` +
+      `  • Reset team and player morale to baseline\n` +
+      `  • Clear every rival club's relationship rating with ${team}\n` +
+      `  • Wipe DM history for ${team}\n` +
+      `  • Get talked about in the press and around the league.`
+    )) return;
+    const personality = isUserManager ? "USER CONTROLLED" : (mgrDescDraft.trim() || (manager?.personality ?? ""));
+    fireAndHireManager(team, { name: nextName, personality });
   }
 
-  const isUserClub = isContractExempt(team);
   const payroll = t.players.reduce((s, p) => s + (p.salary ?? 0), 0);
   const slots = buildLineupSlots(t.formation);
   const starterCount = t.lineup.filter((n) => {
@@ -200,11 +219,18 @@ export function TeamEditorSuite() {
               Manager Description / Personality
             </label>
             <Textarea
-              value={mgrDescDraft}
+              value={isUserManager ? "USER CONTROLLED" : mgrDescDraft}
               onChange={(e) => setMgrDescDraft(e.target.value)}
               placeholder="Negotiation personality and trading tendencies…"
               className="min-h-[72px] bg-card"
+              disabled={isUserManager}
+              readOnly={isUserManager}
             />
+            {isUserManager && (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                User-controlled managers can't type a personality — the AI derives one from your actual press quotes and messages.
+              </p>
+            )}
           </div>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -226,11 +252,28 @@ export function TeamEditorSuite() {
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3">
-          <Button size="sm" variant="secondary" onClick={saveManager} disabled={!mgrDirty || !mgrNameDraft.trim()}>
-            SAVE MANAGER
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={fireAndHire}
+            disabled={!mgrNameDraft.trim() || mgrNameDraft.trim() === (manager?.name ?? "")}
+          >
+            FIRE MANAGER AND HIRE NEW
           </Button>
+          {/* Personality (for non-user clubs) can still be tweaked without a
+              public sacking via the classic replaceManager path. */}
+          {!isUserManager && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => replaceManager(team, { name: mgrNameDraft.trim(), personality: mgrDescDraft.trim() })}
+              disabled={!mgrDirty || !mgrNameDraft.trim()}
+            >
+              SAVE PERSONALITY
+            </Button>
+          )}
           <p className="text-xs text-muted-foreground">
-            Edits the AI manager used by the Negotiation Suite. Kept separate from the player roster below.
+            Firing is a PUBLIC action — rivals, press, and DMs may reference it.
           </p>
         </div>
       </div>

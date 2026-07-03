@@ -10,9 +10,14 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 
-const TEMPO_MAP = [1.0, 1.2, 1.4];
-const TEMPO_LABEL = ["Slow", "Normal", "Fast"];
-const defaultTempoIdx = () => Math.max(0, TEMPO_MAP.indexOf(settings.defaultTempo));
+// Continuous tempo range (0.1× – 2.0×). The old 3-option preset (Slow/Normal/
+// Fast) was replaced with a free-form slider so users can dial in any pace.
+const TEMPO_MIN = 0.1;
+const TEMPO_MAX = 2.0;
+const TEMPO_STEP = 0.05;
+const clampTempo = (v: number) => Math.max(TEMPO_MIN, Math.min(TEMPO_MAX, Math.round(v * 100) / 100));
+const tempoLabel = (v: number) => (v <= 0.9 ? "Slow" : v >= 1.4 ? "Fast" : "Normal");
+const defaultTempo = () => clampTempo(settings.defaultTempo);
 
 interface Props {
   initialHome?: string;
@@ -43,7 +48,17 @@ export function SimulationTerminal({
 
   const [home, setHome] = useState(initialHome ?? teams[0]);
   const [away, setAway] = useState(initialAway ?? teams[1]);
-  const [tempoIdx, setTempoIdx] = useState(defaultTempoIndex ?? defaultTempoIdx());
+  // `defaultTempoIndex` prop name kept for backwards compat with callers, but
+  // it now carries a raw tempo VALUE (0.1–2.0). If a legacy caller passes an
+  // integer index (0/1/2) we translate it to the old preset value.
+  const initialTempo = (() => {
+    if (typeof defaultTempoIndex !== "number") return defaultTempo();
+    if (defaultTempoIndex >= 0 && defaultTempoIndex <= 2 && Number.isInteger(defaultTempoIndex)) {
+      return [1.0, 1.2, 1.4][defaultTempoIndex];
+    }
+    return clampTempo(defaultTempoIndex);
+  })();
+  const [tempo, setTempo] = useState<number>(initialTempo);
   const [goalMult, setGoalMult] = useState(settings.goalMultiplier);
 
   const [running, setRunning] = useState(false);
@@ -74,7 +89,7 @@ export function SimulationTerminal({
     setRunning(true);
     setScore(null);
     setLines([]);
-    const result = simulateMatch(state, home, away, TEMPO_MAP[tempoIdx], goalMult, playoff);
+    const result = simulateMatch(state, home, away, tempo, goalMult, playoff);
     const fullLog = result.log;
     let i = 0;
     timerRef.current = window.setInterval(() => {
@@ -148,11 +163,17 @@ export function SimulationTerminal({
         <div className="rounded-lg border bg-card p-4">
           <div className="mb-3 flex items-center justify-between text-sm font-semibold">
             <span>Match Tempo</span>
-            <span className="text-primary">{TEMPO_LABEL[tempoIdx]} ({TEMPO_MAP[tempoIdx].toFixed(1)}x)</span>
+            <span className="text-primary">{tempoLabel(tempo)} ({tempo.toFixed(2)}x)</span>
           </div>
-          <Slider min={0} max={2} step={1} value={[tempoIdx]} onValueChange={(v) => setTempoIdx(v[0])} />
+          <Slider
+            min={TEMPO_MIN}
+            max={TEMPO_MAX}
+            step={TEMPO_STEP}
+            value={[tempo]}
+            onValueChange={(v) => setTempo(clampTempo(v[0]))}
+          />
           <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-            <span>Slow</span><span>Normal</span><span>Fast</span>
+            <span>0.1x</span><span>1.0x</span><span>2.0x</span>
           </div>
         </div>
         <div className="rounded-lg border bg-card p-4">
