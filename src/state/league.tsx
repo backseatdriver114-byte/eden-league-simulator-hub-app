@@ -256,37 +256,141 @@ export function isValidFormation(f: string): boolean {
 }
 
 // Slots: a GK slot (line 0) plus one generic outfield slot per formation unit.
-// Any player may fill any outfield slot, so the group is "OUT".
-export interface LineupSlot { group: PosGroup | "OUT"; label: string; line: number; }
+// Each slot now carries an `idealPosition` label (CB / LB / CM / ST / …)
+// derived from the row (defense/midfield/attack) and lateral offset so
+// auto-fill and formation-change re-mapping can place players by ROLE.
+export interface LineupSlot { group: PosGroup | "OUT"; label: string; line: number; idealPosition: string; }
+
+// Position labels for each slot in a given formation row, left → right.
+function idealPositionsForRow(rowIdx: number, count: number, totalOutfieldRows: number): string[] {
+  const isFirst = rowIdx === 0; // back line
+  const isLast = rowIdx === totalOutfieldRows - 1; // front line
+  const out: string[] = [];
+  if (isFirst) {
+    if (count === 1) return ["CB"];
+    if (count === 2) return ["LB", "RB"];
+    if (count === 3) return ["LB", "CB", "RB"];
+    if (count === 4) return ["LB", "CB", "CB", "RB"];
+    out.push("LB");
+    for (let i = 0; i < count - 2; i++) out.push("CB");
+    out.push("RB");
+    return out;
+  }
+  if (isLast) {
+    if (count === 1) return ["ST"];
+    if (count === 2) return ["LW", "RW"];
+    if (count === 3) return ["LW", "ST", "RW"];
+    out.push("LW");
+    for (let i = 0; i < count - 2; i++) out.push("ST");
+    out.push("RW");
+    return out;
+  }
+  // Middle row(s): choose CDM (near back), CM (middle), CAM (near front).
+  const rel = totalOutfieldRows <= 2 ? 0.5 : rowIdx / (totalOutfieldRows - 1);
+  const centerPos = rel < 0.4 ? "CDM" : rel > 0.6 ? "CAM" : "CM";
+  if (count === 1) return [centerPos];
+  if (count === 2) return [centerPos, centerPos];
+  if (count === 3) return ["LM", centerPos, "RM"];
+  if (count === 4) return ["LM", centerPos, centerPos, "RM"];
+  out.push("LM");
+  for (let i = 0; i < count - 2; i++) out.push(centerPos);
+  out.push("RM");
+  return out;
+}
+
 export function buildLineupSlots(formation: string): LineupSlot[] {
   const rows = parseFormation(formation);
-  const slots: LineupSlot[] = [{ group: "GK", label: "GK", line: 0 }];
+  const slots: LineupSlot[] = [{ group: "GK", label: "GK", line: 0, idealPosition: "GK" }];
   rows.forEach((count, r) => {
+    const ideals = idealPositionsForRow(r, count, rows.length);
     for (let i = 0; i < count; i++) {
-      slots.push({ group: "OUT", label: `${r + 1}.${i + 1}`, line: r + 1 });
+      slots.push({ group: "OUT", label: `${r + 1}.${i + 1}`, line: r + 1, idealPosition: ideals[i] ?? "CM" });
     }
   });
   return slots;
 }
 
-// Pick a sensible default lineup from the available roster. The GK slot prefers a
-// goalkeeper; every other slot takes the highest-rated remaining healthy player.
+// Pick a sensible default lineup that RESPECTS each player's listed position.
+// Greedy best-fit: iterate slots in order of specificity (GK → wide roles →
+// specialised centers → generic CM/ST) and for each slot pick the highest-
+// scoring unused, healthy player, where score blends positional fit (dominant)
+// with rating (tiebreaker). Falls back to any healthy player, then any player,
+// so no slot is ever left empty when a warm body is available.
 export function buildDefaultLineup(players: LeaguePlayer[], formation: string): string[] {
   const slots = buildLineupSlots(formation);
+  return assignPlayersToSlots(slots, players, []);
+}
+
+// Slot fill priority: GK first, then the roles hardest to substitute (fullbacks,
+// wingers, out-and-out wide mids), then specialised centres, then generic ones.
+const SLOT_PRIORITY: Record<string, number> = {
+  GK: 0, LB: 1, RB: 1, LWB: 1, RWB: 1, LW: 2, RW: 2, LM: 3, RM: 3,
+  CDM: 4, CAM: 4, CB: 5, ST: 6, CM: 7,
+};
+function slotPriority(pos: string): number {
+  return SLOT_PRIORITY[(pos || "").toUpperCase()] ?? 8;
+}
+
+// Greedy position-aware slot assignment. `preferred` lets a caller pass names
+// that should be prioritised for consideration first (used by formation
+// remap to preserve current starters).
+function assignPlayersToSlots(
+  slots: LineupSlot[],
+  players: LeaguePlayer[],
+  preferred: string[],
+): string[] {
+  const lineup: string[] = slots.map(() => "");
   const used = new Set<string>();
-  const ranked = [...players].sort((a, b) => b.rating - a.rating);
-  const lineup: string[] = [];
-  for (const slot of slots) {
+  const order = slots
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => slotPriority(a.s.idealPosition) - slotPriority(b.s.idealPosition));
+
+  const scorePlayerForSlot = (p: LeaguePlayer, slot: LineupSlot): number => {
+    const fit = positionSimilarity(slot.idealPosition, p.position);
+    const boost = preferred.includes(p.name) ? 0.5 : 0;
+    // Position fit dominates; rating breaks ties between similarly-fit players.
+    return fit * 10 + boost + p.rating * 0.5;
+  };
+
+  for (const { s, i } of order) {
     let pick: LeaguePlayer | undefined;
-    if (slot.group === "GK") {
-      pick = ranked.find((p) => !used.has(p.name) && !isPlayerOut(p) && positionGroup(p.position) === "GK");
+    let pickScore = -Infinity;
+    for (const p of players) {
+      if (used.has(p.name)) continue;
+      if (isPlayerOut(p)) continue;
+      // GK slots demand a keeper (positionSimilarity already returns 0 across the GK gap).
+      if (s.group === "GK" && positionGroup(p.position) !== "GK") continue;
+      if (s.group !== "GK" && positionGroup(p.position) === "GK") continue;
+      const sc = scorePlayerForSlot(p, s);
+      if (sc > pickScore) { pickScore = sc; pick = p; }
     }
-    if (!pick) pick = ranked.find((p) => !used.has(p.name) && !isPlayerOut(p));
-    if (!pick) pick = ranked.find((p) => !used.has(p.name));
-    if (pick) { used.add(pick.name); lineup.push(pick.name); }
-    else lineup.push("");
+    // Fallbacks so slots don't stay empty for depleted squads.
+    if (!pick) {
+      pick = players.find((p) => !used.has(p.name) && !isPlayerOut(p));
+    }
+    if (!pick) pick = players.find((p) => !used.has(p.name));
+    if (pick) { used.add(pick.name); lineup[i] = pick.name; }
   }
   return lineup;
+}
+
+// Formation change: preserve current starters as much as possible, then let
+// them settle into the closest matching role in the new formation. Reserves
+// stay on the bench unless a starter has no natural fit (in which case a
+// better-fit bench player can be promoted).
+export function remapLineupForFormation(
+  players: LeaguePlayer[],
+  oldLineup: string[],
+  newFormation: string,
+): string[] {
+  const newSlots = buildLineupSlots(newFormation);
+  const starterNames = oldLineup.filter(Boolean);
+  const starters = players.filter((p) => starterNames.includes(p.name));
+  const bench = players.filter((p) => !starterNames.includes(p.name));
+  // Try to place only current starters first — this is what preserves the
+  // "same 9 on the pitch" feel across a formation tweak.
+  const pool = [...starters, ...bench]; // starters get first crack via the preferred boost
+  return assignPlayersToSlots(newSlots, pool, starterNames);
 }
 
 // Re-derive each player's `starter` flag from the team lineup.
