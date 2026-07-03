@@ -2311,6 +2311,118 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
       }),
     clearPressArchive: () =>
       update((prev) => ({ ...prev, pressArchive: [] })),
+    appendArticleEntry: (entry) =>
+      update((prev) => {
+        const full: ArticleArchiveEntry = {
+          id: entry.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `article-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+          createdAt: entry.createdAt ?? new Date().toISOString(),
+          season: entry.season,
+          week: entry.week,
+          kind: entry.kind,
+          title: entry.title,
+          body: entry.body,
+          focus: entry.focus,
+        };
+        const prevArchive = prev.articleArchive ?? [];
+        // Cap at 500 to mirror the press archive so exports stay reasonable.
+        const nextArchive = [...prevArchive, full].slice(-500);
+        return { ...prev, articleArchive: nextArchive };
+      }),
+    clearArticleArchive: () =>
+      update((prev) => ({ ...prev, articleArchive: [] })),
+    appendLeagueEvent: (event) =>
+      update((prev) => {
+        const full: LeagueEvent = {
+          id: event.id ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+          createdAt: event.createdAt ?? new Date().toISOString(),
+          season: event.season,
+          week: event.week,
+          kind: event.kind,
+          team: event.team,
+          detail: event.detail,
+        };
+        const prev2 = prev.leagueEvents ?? [];
+        return { ...prev, leagueEvents: [...prev2, full].slice(-300) };
+      }),
+    sackAiManager: (team, reason) =>
+      update((prev) => {
+        const t = prev.teams[team];
+        const m = prev.managers?.[team];
+        if (!t || !m) return prev;
+        if ((m.personality ?? "").trim().toUpperCase() === "USER CONTROLLED") return prev;
+        if (isContractExempt(team)) return prev;
+        const clone = { ...t, players: [...t.players] };
+        triggerManagerSack(clone);
+        const evt: LeagueEvent = {
+          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          season: prev.season,
+          week: prev.currentWeek,
+          kind: "manager_fired",
+          team,
+          detail: reason
+            ? `${m.name} was sacked by ${team}. Boardroom review: ${reason.slice(0, 160)}`
+            : `${m.name} was sacked by ${team} following a boardroom review.`,
+        };
+        return {
+          ...prev,
+          teams: { ...prev.teams, [team]: clone },
+          managers: { ...prev.managers, [team]: { ...m, respect: 55 } },
+          leagueEvents: [...(prev.leagueEvents ?? []), evt].slice(-300),
+        };
+      }),
+    fireAndHireManager: (team, incoming) =>
+      update((prev) => {
+        const t = prev.teams[team];
+        if (!t) return prev;
+        const outgoing = prev.managers?.[team];
+        const outgoingName = outgoing?.name ?? "the previous manager";
+        const baselineMorale = (prev.settings ?? getSettings()).moraleBaseline ?? 60;
+        // 1) Reset team + player morale to the configured baseline.
+        const players = t.players.map((p) => ({ ...p, morale: baselineMorale }));
+        // 2) Reset manager row: new identity, neutral respect, neutral tone.
+        const nextManager = {
+          ...(outgoing ?? {}),
+          name: incoming.name.trim() || outgoingName,
+          personality: incoming.personality,
+          respect: 50,
+          harshness: 0.5,
+        } as typeof outgoing extends undefined ? Record<string, unknown> : NonNullable<typeof outgoing>;
+        // 3) Wipe every OTHER club's stored relation TOWARD this team so
+        //    ratings reset with the new hire.
+        const relations = { ...(prev.relations ?? {}) };
+        for (const key of Object.keys(relations)) {
+          if (key === team || key.includes(team)) delete relations[key];
+        }
+        // 4) Fire-and-forget wipe of DM history in Supabase for this team.
+        //    Non-blocking on purpose — UI updates immediately and the network
+        //    call cleans up in the background. If it fails, MessagesSuite's
+        //    manual "Clear Archive" button remains available as a fallback.
+        try {
+          supabase.from("manager_messages").delete().eq("user_team", team).then(() => {}, () => {});
+        } catch { /* ignore — offline is fine, local state already reset */ }
+        // 5) Log a public league event so press/AI can reference the shake-up.
+        const evt: LeagueEvent = {
+          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          season: prev.season,
+          week: prev.currentWeek,
+          kind: "fire_and_hire",
+          team,
+          detail: `${team} fired ${outgoingName} and hired ${nextManager.name}.`,
+        };
+        return {
+          ...prev,
+          teams: { ...prev.teams, [team]: { ...t, morale: baselineMorale, players } },
+          managers: { ...(prev.managers ?? {}), [team]: nextManager },
+          relations,
+          leagueEvents: [...(prev.leagueEvents ?? []), evt].slice(-300),
+        };
+      }),
   };
 
   return <LeagueContext.Provider value={value}>{children}</LeagueContext.Provider>;
