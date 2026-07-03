@@ -48,7 +48,17 @@ export function SimulationTerminal({
 
   const [home, setHome] = useState(initialHome ?? teams[0]);
   const [away, setAway] = useState(initialAway ?? teams[1]);
-  const [tempoIdx, setTempoIdx] = useState(defaultTempoIndex ?? defaultTempoIdx());
+  // `defaultTempoIndex` prop name kept for backwards compat with callers, but
+  // it now carries a raw tempo VALUE (0.1–2.0). If a legacy caller passes an
+  // integer index (0/1/2) we translate it to the old preset value.
+  const initialTempo = (() => {
+    if (typeof defaultTempoIndex !== "number") return defaultTempo();
+    if (defaultTempoIndex >= 0 && defaultTempoIndex <= 2 && Number.isInteger(defaultTempoIndex)) {
+      return [1.0, 1.2, 1.4][defaultTempoIndex];
+    }
+    return clampTempo(defaultTempoIndex);
+  })();
+  const [tempo, setTempo] = useState<number>(initialTempo);
   const [goalMult, setGoalMult] = useState(settings.goalMultiplier);
 
   const [running, setRunning] = useState(false);
