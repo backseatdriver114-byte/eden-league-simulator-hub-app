@@ -105,7 +105,7 @@ export function TeamEditorSuite() {
       `  • Wipe DM history for ${team}\n` +
       `  • Get talked about in the press and around the league.`
     )) return;
-    const personality = isUserManager ? "USER CONTROLLED" : (mgrDescDraft.trim() || manager?.personality ?? "");
+    const personality = isUserManager ? "USER CONTROLLED" : (mgrDescDraft.trim() || (manager?.personality ?? ""));
     fireAndHireManager(team, { name: nextName, personality });
   }
 
