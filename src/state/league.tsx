@@ -166,6 +166,13 @@ export interface LeagueState {
   // is recorded here so AI features (future press questions, news articles,
   // DM replies) can reference what the manager actually said on the record.
   pressArchive?: PressArchiveEntry[];
+  // Media Article archive. Every article the Newsroom writes is auto-filed
+  // here so users can revisit past coverage and (later) so AI features can
+  // reference the league's own news history.
+  articleArchive?: ArticleArchiveEntry[];
+  // Public league events (managerial sackings, hires). Small notes the
+  // press/AI can reference. Capped to a rolling window.
+  leagueEvents?: LeagueEvent[];
 }
 
 export interface PressArchiveEntry {
@@ -180,6 +187,27 @@ export interface PressArchiveEntry {
   summary?: string;      // AI-scored one-clause headline (optional)
   targets?: { kind: "team" | "player" | "manager"; team?: string; name?: string }[];
   createdAt: string;     // ISO timestamp
+}
+
+export interface ArticleArchiveEntry {
+  id: string;
+  season: number;
+  week: number;
+  kind: "postgame" | "roundup" | "drama";
+  title: string;         // first line / headline extract
+  body: string;          // full markdown article
+  focus?: string;        // reader-supplied angle, if any
+  createdAt: string;     // ISO timestamp
+}
+
+export interface LeagueEvent {
+  id: string;
+  season: number;
+  week: number;
+  kind: "manager_fired" | "manager_hired" | "fire_and_hire";
+  team: string;
+  detail: string;        // human-readable summary
+  createdAt: string;
 }
 
 export interface StandingRow {
