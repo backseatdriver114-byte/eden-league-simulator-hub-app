@@ -2247,19 +2247,22 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         if (!m) return prev;
         const cur = typeof m.respect === "number" ? m.respect : 50;
         const mult = (prev.settings ?? getSettings()).managerRatingVolatility ?? 1;
-        const sackAt = (prev.settings ?? getSettings()).sackThreshold ?? 25;
-        let next = clampRespect(cur + delta * mult);
-        const teams = { ...prev.teams };
-        if (next < sackAt && !isContractExempt(team) && (m.personality ?? "").trim().toUpperCase() !== "USER CONTROLLED") {
-          const t = teams[team];
-          if (t) {
-            const clone = { ...t, players: [...t.players] };
-            triggerManagerSack(clone);
-            teams[team] = clone;
-          }
-          next = 55;
-        }
-        return { ...prev, teams, managers: { ...prev.managers, [team]: { ...m, respect: next } } };
+        // NOTE: sacking is no longer triggered here. AI sackings are decided
+        // once per week by the AiSackingWatcher (boardroom review) so respect
+        // dips don't automatically fire someone mid-flow.
+        const next = clampRespect(cur + delta * mult);
+        return { ...prev, managers: { ...prev.managers, [team]: { ...m, respect: next } } };
+      }),
+    applyPressRespectDelta: (team, delta) =>
+      update((prev) => {
+        const m = prev.managers?.[team];
+        if (!m) return prev;
+        const cur = typeof m.respect === "number" ? m.respect : 50;
+        // Uses the DEDICATED press-conference volatility multiplier so the
+        // user can crank interview stakes without changing weekly match drift.
+        const mult = (prev.settings ?? getSettings()).pressConferenceVolatility ?? 1;
+        const next = clampRespect(cur + delta * mult);
+        return { ...prev, managers: { ...prev.managers, [team]: { ...m, respect: next } } };
       }),
     applyManagerHarshnessSample: (team, sample) =>
       update((prev) => {
