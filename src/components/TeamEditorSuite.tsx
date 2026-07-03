@@ -219,11 +219,18 @@ export function TeamEditorSuite() {
               Manager Description / Personality
             </label>
             <Textarea
-              value={mgrDescDraft}
+              value={isUserManager ? "USER CONTROLLED" : mgrDescDraft}
               onChange={(e) => setMgrDescDraft(e.target.value)}
               placeholder="Negotiation personality and trading tendencies…"
               className="min-h-[72px] bg-card"
+              disabled={isUserManager}
+              readOnly={isUserManager}
             />
+            {isUserManager && (
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                User-controlled managers can't type a personality — the AI derives one from your actual press quotes and messages.
+              </p>
+            )}
           </div>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
