@@ -1385,24 +1385,21 @@ function applyRespectTick(state: LeagueState): LeagueState {
     }
     const cur = typeof m.respect === "number" ? m.respect : 50;
     const midpoint = (total + 1) / 2;
-    const tilt = (midpoint - rankOf(name)) * (22 / midpoint);
+    // Standings weight: the base tilt magnitude used to be 22 (a top-of-table
+    // manager pulled toward ~72). Multiply by standingsWeight so match
+    // results/standings clearly dominate weekly respect drift — leading the
+    // table gets you noticeably more respect than a middle-of-the-pack finish.
+    const standingsWeight = state.settings?.standingsWeight ?? 1;
+    const tilt = (midpoint - rankOf(name)) * ((22 * standingsWeight) / midpoint);
     const target = 50 + tilt;
-    let next = cur + (target - cur) * 0.15;
+    // Bumped pull rate from 0.15 → 0.22 so standings matter more per week too.
+    let next = cur + (target - cur) * 0.22;
     const harsh = typeof m.harshness === "number" ? m.harshness : 0.5;
     const dev = Math.abs(harsh - 0.5);
     if (dev > 0.25) next -= (dev - 0.25) * 6;
     next = Math.max(0, Math.min(100, cur + (next - cur) * mult));
-    // Respect-driven sacking: fire the manager when respect collapses.
-    if (next < sackAt && !isContractExempt(name)) {
-      const teamObj = teams[name];
-      if (teamObj) {
-        const clone = { ...teamObj, players: [...teamObj.players] };
-        triggerManagerSack(clone);
-        teams[name] = clone;
-      }
-      next = 55; // new-manager respect bounce
-      changed = true;
-    }
+    // Sacking is NOT auto-triggered here anymore — AiSackingWatcher runs a
+    // multi-factor boardroom review each week and calls sackAiManager().
     if (Math.abs(next - cur) > 0.05) changed = true;
     managers[name] = { ...m, respect: Math.round(next * 10) / 10 };
   }
