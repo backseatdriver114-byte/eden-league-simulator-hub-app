@@ -75,16 +75,27 @@ function LeagueSettings({
 
       <div className="grid gap-4 md:grid-cols-2">
         <SettingsCard title="Simulation Engine">
-          <SelectSetting
-            label="Default tempo"
-            value={String(s.defaultTempo)}
-            options={[
-              { value: "1", label: "Slow (1.0×)" },
-              { value: "1.2", label: "Normal (1.2×)" },
-              { value: "1.4", label: "Fast (1.4×)" },
-            ]}
-            onChange={(v) => setSettings({ defaultTempo: parseFloat(v) })}
-          />
+          {/* Continuous tempo slider (0.1× – 2.0×). Previously a 3-option
+              select (Slow/Normal/Fast); the user asked for full free-form
+              control. Any decimal in-range is now allowed. */}
+          <div className="rounded-lg border bg-panel/40 p-3">
+            <div className="flex items-baseline justify-between">
+              <label className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Default tempo</label>
+              <span className="font-mono font-bold text-primary">{s.defaultTempo.toFixed(2)}×</span>
+            </div>
+            <Slider
+              value={[s.defaultTempo]}
+              min={0.1}
+              max={2}
+              step={0.05}
+              onValueChange={([v]) => setSettings({ defaultTempo: Math.round(v * 100) / 100 })}
+              className="mt-2"
+            />
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Slower = fewer goals & chances per minute. 1.0× is baseline; 2.0× is chaotic end-to-end.
+            </p>
+          </div>
+
           <NumberSetting
             label="Goal multiplier (default)" value={s.goalMultiplier} step={0.05} min={0.1} max={2}
             onCommit={(v) => setSettings({ goalMultiplier: v })}
