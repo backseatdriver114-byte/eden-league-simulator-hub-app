@@ -316,6 +316,31 @@ function LeagueSettings({
               onValueChange={([v]) => setSettings({ managerRatingVolatility: Math.round(v * 100) / 100 })} />
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               How wildly the respect rating swings each week based on standings + harshness extremes.
+              This is the SEASONAL/match-results dial — press-conference swings have their own slider below.
+            </p>
+          </div>
+          <div className="py-2">
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Press conference volatility</span>
+              <span className="font-mono font-bold text-primary">{(s.pressConferenceVolatility ?? 1).toFixed(2)}×</span>
+            </div>
+            <Slider value={[s.pressConferenceVolatility ?? 1]} min={0} max={5} step={0.1}
+              onValueChange={([v]) => setSettings({ pressConferenceVolatility: Math.round(v * 100) / 100 })} />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Dedicated multiplier for respect movement caused by press-conference answers ONLY.
+              Crank this up for high-drama interviews without changing weekly match drift.
+            </p>
+          </div>
+          <div className="py-2">
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Standings weight (respect drift)</span>
+              <span className="font-mono font-bold text-primary">{(s.standingsWeight ?? 1).toFixed(2)}×</span>
+            </div>
+            <Slider value={[s.standingsWeight ?? 1]} min={0.5} max={4} step={0.1}
+              onValueChange={([v]) => setSettings({ standingsWeight: Math.round(v * 100) / 100 })} />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              How much league position pulls a manager's respect each week. Higher = the top of the table earns
+              much more respect than the bottom.
             </p>
           </div>
           <NumberSetting label="Relations baseline" value={s.relationsBaseline} step={1} min={0} max={100}
