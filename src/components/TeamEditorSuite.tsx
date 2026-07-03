@@ -252,11 +252,28 @@ export function TeamEditorSuite() {
           </div>
         </div>
         <div className="mt-3 flex items-center gap-3">
-          <Button size="sm" variant="secondary" onClick={saveManager} disabled={!mgrDirty || !mgrNameDraft.trim()}>
-            SAVE MANAGER
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={fireAndHire}
+            disabled={!mgrNameDraft.trim() || mgrNameDraft.trim() === (manager?.name ?? "")}
+          >
+            FIRE MANAGER AND HIRE NEW
           </Button>
+          {/* Personality (for non-user clubs) can still be tweaked without a
+              public sacking via the classic replaceManager path. */}
+          {!isUserManager && (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => replaceManager(team, { name: mgrNameDraft.trim(), personality: mgrDescDraft.trim() })}
+              disabled={!mgrDirty || !mgrNameDraft.trim()}
+            >
+              SAVE PERSONALITY
+            </Button>
+          )}
           <p className="text-xs text-muted-foreground">
-            Edits the AI manager used by the Negotiation Suite. Kept separate from the player roster below.
+            Firing is a PUBLIC action — rivals, press, and DMs may reference it.
           </p>
         </div>
       </div>
