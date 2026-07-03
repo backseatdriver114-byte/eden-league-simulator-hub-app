@@ -163,11 +163,17 @@ export function SimulationTerminal({
         <div className="rounded-lg border bg-card p-4">
           <div className="mb-3 flex items-center justify-between text-sm font-semibold">
             <span>Match Tempo</span>
-            <span className="text-primary">{TEMPO_LABEL[tempoIdx]} ({TEMPO_MAP[tempoIdx].toFixed(1)}x)</span>
+            <span className="text-primary">{tempoLabel(tempo)} ({tempo.toFixed(2)}x)</span>
           </div>
-          <Slider min={0} max={2} step={1} value={[tempoIdx]} onValueChange={(v) => setTempoIdx(v[0])} />
+          <Slider
+            min={TEMPO_MIN}
+            max={TEMPO_MAX}
+            step={TEMPO_STEP}
+            value={[tempo]}
+            onValueChange={(v) => setTempo(clampTempo(v[0]))}
+          />
           <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-            <span>Slow</span><span>Normal</span><span>Fast</span>
+            <span>0.1x</span><span>1.0x</span><span>2.0x</span>
           </div>
         </div>
         <div className="rounded-lg border bg-card p-4">
