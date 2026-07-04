@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "sdk_version": "0.20.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "none"
+  },
+  "mcp": {
+    "server": {
+      "name": "eden-league-mcp",
+      "version": "0.1.0",
+      "title": "Eden League Data Hub"
+    },
+    "tools": [
+      {
+        "name": "get_standings",
+        "title": "Get league standings",
+        "description": "Return the current Eden League standings (team, W-L-D, points, goal diff) sorted from first to last.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_teams",
+        "title": "List teams",
+        "description": "List every team in the Eden League with roster size, average rating, and manager name.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_team",
+        "title": "Get team details",
+        "description": "Return roster, manager, budget, payroll, and record for one team by name (case-insensitive).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "team": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Team name, e.g. 'Ashford FC'."
+            }
+          },
+          "required": [
+            "team"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "get_recent_news",
+        "title": "Get recent league news",
+        "description": "Return recent beat-writer articles and press-conference summaries from the league newsroom archive.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "description": "Max entries to return (default 10)."
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
