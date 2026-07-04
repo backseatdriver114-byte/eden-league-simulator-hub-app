@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useLeague, ATTR_KEYS, isPlayerOut, SEASON_ENDING_WEEKS,
   buildLineupSlots, isValidFormation, type AttrKey, type LineupSlot,
@@ -6,6 +6,7 @@ import {
 import { useNavigation } from "@/state/navigation";
 import { isContractExempt } from "@/lib/engine-settings";
 import { moraleLabel } from "@/lib/morale";
+import { getTeamLogo, getTeamColors, normalizeHex, hexOrNoneDisplay } from "@/lib/team-branding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +51,7 @@ export function TeamEditorSuite() {
     state, updateBudget, updatePlayer,
     setInjuryWeeks, setSuspensionWeeks, addPlayer, removePlayer, renameTeam,
     setLineupSlot, setFormation, autoFillLineup, setTacticalStyle,
+    setTeamLogo, setTeamColors,
     replaceManager, fireAndHireManager, setPlayerForSale,
   } = useLeague();
   const { consumePayload } = useNavigation();
