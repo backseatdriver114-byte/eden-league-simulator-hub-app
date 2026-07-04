@@ -1103,6 +1103,8 @@ interface LeagueContextValue {
   importLeagueExport: (raw: unknown) => { ok: true } | { ok: false; error: string };
   updateBudget: (team: string, budget: string) => void;
   setTacticalStyle: (team: string, style: string) => void;
+  setTeamLogo: (team: string, logo: string | null) => void;
+  setTeamColors: (team: string, colors: LeagueTeamColors) => void;
   updatePlayer: (team: string, index: number, patch: Partial<LeaguePlayer>) => void;
   setLineupSlot: (team: string, slot: number, playerName: string) => void;
   setFormation: (team: string, formation: string) => void;
