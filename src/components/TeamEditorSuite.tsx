@@ -68,6 +68,11 @@ export function TeamEditorSuite() {
   const manager = state.managers?.[team];
   const [mgrNameDraft, setMgrNameDraft] = useState(manager?.name ?? "");
   const [mgrDescDraft, setMgrDescDraft] = useState(manager?.personality ?? "");
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const currentColors = getTeamColors(state.teams[team] ?? { name: team });
+  const [primaryDraft, setPrimaryDraft] = useState(hexOrNoneDisplay(currentColors.primary));
+  const [secondaryDraft, setSecondaryDraft] = useState(hexOrNoneDisplay(currentColors.secondary));
+  const [tertiaryDraft, setTertiaryDraft] = useState(hexOrNoneDisplay(currentColors.tertiary));
 
   useEffect(() => {
     if (!state.teams[team]) setTeam(state.teamOrder[0]);
