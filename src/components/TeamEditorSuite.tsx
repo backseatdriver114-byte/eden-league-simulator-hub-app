@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useLeague, ATTR_KEYS, isPlayerOut, SEASON_ENDING_WEEKS,
   buildLineupSlots, isValidFormation, type AttrKey, type LineupSlot,
@@ -6,6 +6,7 @@ import {
 import { useNavigation } from "@/state/navigation";
 import { isContractExempt } from "@/lib/engine-settings";
 import { moraleLabel } from "@/lib/morale";
+import { getTeamLogo, getTeamColors, normalizeHex, hexOrNoneDisplay } from "@/lib/team-branding";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +51,7 @@ export function TeamEditorSuite() {
     state, updateBudget, updatePlayer,
     setInjuryWeeks, setSuspensionWeeks, addPlayer, removePlayer, renameTeam,
     setLineupSlot, setFormation, autoFillLineup, setTacticalStyle,
+    setTeamLogo, setTeamColors,
     replaceManager, fireAndHireManager, setPlayerForSale,
   } = useLeague();
   const { consumePayload } = useNavigation();
@@ -66,6 +68,11 @@ export function TeamEditorSuite() {
   const manager = state.managers?.[team];
   const [mgrNameDraft, setMgrNameDraft] = useState(manager?.name ?? "");
   const [mgrDescDraft, setMgrDescDraft] = useState(manager?.personality ?? "");
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const currentColors = getTeamColors(state.teams[team] ?? { name: team });
+  const [primaryDraft, setPrimaryDraft] = useState(hexOrNoneDisplay(currentColors.primary));
+  const [secondaryDraft, setSecondaryDraft] = useState(hexOrNoneDisplay(currentColors.secondary));
+  const [tertiaryDraft, setTertiaryDraft] = useState(hexOrNoneDisplay(currentColors.tertiary));
 
   useEffect(() => {
     if (!state.teams[team]) setTeam(state.teamOrder[0]);
@@ -79,6 +86,12 @@ export function TeamEditorSuite() {
     setMgrNameDraft(m?.name ?? "");
     setMgrDescDraft(m?.personality ?? "");
   }, [team, state.managers]);
+  useEffect(() => {
+    const c = getTeamColors(state.teams[team] ?? { name: team });
+    setPrimaryDraft(hexOrNoneDisplay(c.primary));
+    setSecondaryDraft(hexOrNoneDisplay(c.secondary));
+    setTertiaryDraft(hexOrNoneDisplay(c.tertiary));
+  }, [team, state.teams]);
 
   const t = state.teams[team];
   if (!t) return null;
@@ -160,6 +173,94 @@ export function TeamEditorSuite() {
             <Button size="sm" variant="secondary" onClick={saveName} disabled={nameDraft.trim() === team || !nameDraft.trim()}>
               SAVE NAME
             </Button>
+            {/* Team logo picker (sits directly beside the name input) */}
+            <div className="flex items-center gap-2 rounded-md border bg-card px-2 py-1">
+              <span
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white"
+                style={{ boxShadow: `0 0 0 2px ${currentColors.primary ?? "hsl(var(--muted-foreground))"}` }}
+              >
+                {getTeamLogo(t) ? (
+                  <img src={getTeamLogo(t)!} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-[10px] font-bold text-muted-foreground">{team.slice(0, 2).toUpperCase()}</span>
+                )}
+              </span>
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const url = typeof reader.result === "string" ? reader.result : "";
+                    if (url) setTeamLogo(team, url);
+                  };
+                  reader.readAsDataURL(file);
+                  // reset so re-selecting the same file re-triggers
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => logoInputRef.current?.click()}
+              >
+                CHOOSE LOGO
+              </Button>
+              {t.logo ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setTeamLogo(team, null)}
+                  title="Revert to the default seed logo"
+                >
+                  RESET
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Team Colors (hex — type NONE for empty)
+          </label>
+          <div className="flex items-center gap-2">
+            {([
+              { label: "Primary",   draft: primaryDraft,   set: setPrimaryDraft,   key: "primary"   as const },
+              { label: "Secondary", draft: secondaryDraft, set: setSecondaryDraft, key: "secondary" as const },
+              { label: "Tertiary",  draft: tertiaryDraft,  set: setTertiaryDraft,  key: "tertiary"  as const },
+            ]).map((slot) => {
+              const parsed = normalizeHex(slot.draft);
+              return (
+                <div key={slot.key} className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-8 w-8 shrink-0 rounded-md border"
+                    style={{ background: parsed ?? "transparent", backgroundImage: parsed ? undefined : "repeating-linear-gradient(45deg, #eee 0 4px, #fff 4px 8px)" }}
+                    title={slot.label}
+                  />
+                  <Input
+                    value={slot.draft}
+                    onChange={(e) => slot.set(e.target.value.toUpperCase())}
+                    onBlur={() => {
+                      const val = normalizeHex(slot.draft);
+                      const nextColors = {
+                        primary:   slot.key === "primary"   ? val : normalizeHex(primaryDraft),
+                        secondary: slot.key === "secondary" ? val : normalizeHex(secondaryDraft),
+                        tertiary:  slot.key === "tertiary"  ? val : normalizeHex(tertiaryDraft),
+                      };
+                      setTeamColors(team, nextColors);
+                      slot.set(hexOrNoneDisplay(val));
+                    }}
+                    placeholder="#RRGGBB or NONE"
+                    className="h-8 w-28 bg-card font-mono text-xs uppercase"
+                    aria-label={`${slot.label} color hex`}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
         <div>

@@ -67,6 +67,12 @@ export interface LeaguePlayer {
   WR: number; AGG: number; STR: number; AER: number;
 }
 
+export interface LeagueTeamColors {
+  primary?: string | null;
+  secondary?: string | null;
+  tertiary?: string | null;
+}
+
 export interface LeagueTeam {
   name: string;
   tactical_style: string;
@@ -76,6 +82,10 @@ export interface LeagueTeam {
   lineup: string[]; // ordered slot assignments (player names; "" = empty)
   players: LeaguePlayer[];
   salaryBudget: number; // payroll cap space (set to the global hard cap)
+  // Optional per-team branding overrides. When absent, the app falls back to
+  // the seed defaults in `lib/team-branding.ts` keyed by team name.
+  logo?: string | null; // absolute URL or data URL of the crest image
+  colors?: LeagueTeamColors;
 }
 
 export interface MatchRecord {
@@ -1093,6 +1103,8 @@ interface LeagueContextValue {
   importLeagueExport: (raw: unknown) => { ok: true } | { ok: false; error: string };
   updateBudget: (team: string, budget: string) => void;
   setTacticalStyle: (team: string, style: string) => void;
+  setTeamLogo: (team: string, logo: string | null) => void;
+  setTeamColors: (team: string, colors: LeagueTeamColors) => void;
   updatePlayer: (team: string, index: number, patch: Partial<LeaguePlayer>) => void;
   setLineupSlot: (team: string, slot: number, playerName: string) => void;
   setFormation: (team: string, formation: string) => void;
@@ -1685,6 +1697,18 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         ...prev,
         teams: { ...prev.teams, [team]: { ...prev.teams[team], tactical_style: style } },
       })),
+    setTeamLogo: (team, logo) =>
+      update((prev) => {
+        const t = prev.teams[team];
+        if (!t) return prev;
+        return { ...prev, teams: { ...prev.teams, [team]: { ...t, logo: logo ?? null } } };
+      }),
+    setTeamColors: (team, colors) =>
+      update((prev) => {
+        const t = prev.teams[team];
+        if (!t) return prev;
+        return { ...prev, teams: { ...prev.teams, [team]: { ...t, colors: { ...colors } } } };
+      }),
     updatePlayer: (team, index, patch) =>
       update((prev) => {
         const oldName = prev.teams[team].players[index]?.name;
@@ -2378,9 +2402,19 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         if (!t) return prev;
         const outgoing = prev.managers?.[team];
         const outgoingName = outgoing?.name ?? "the previous manager";
-        const baselineMorale = (prev.settings ?? getSettings()).moraleBaseline ?? 60;
-        // 1) Reset team + player morale to the configured baseline.
-        const players = t.players.map((p) => ({ ...p, morale: baselineMorale }));
+        const s = prev.settings ?? getSettings();
+        // Partial "new manager bounce" — mirrors triggerManagerSack: halfway
+        // recovery toward the configured managerRenewalMorale target, with a
+        // guaranteed minimum lift of +8. NOT a hard reset to 50.
+        const target = s.managerRenewalMorale ?? 60;
+        const bounce = (current: number | undefined) => {
+          const c = typeof current === "number" ? current : (s.moraleBaseline ?? 50);
+          const next = Math.max(c + 8, Math.round((c + target) / 2));
+          return Math.max(0, Math.min(100, next));
+        };
+        // 1) Partial team + player morale bounce (not a flat reset to 50).
+        const players = t.players.map((p) => ({ ...p, morale: bounce(p.morale) }));
+        const teamMorale = bounce(t.morale);
         // 2) Reset manager row: new identity, neutral respect, neutral tone.
         const nextManager = {
           ...(outgoing ?? {}),
@@ -2396,9 +2430,6 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
           if (key === team || key.includes(team)) delete relations[key];
         }
         // 4) Fire-and-forget wipe of DM history in Supabase for this team.
-        //    Non-blocking on purpose — UI updates immediately and the network
-        //    call cleans up in the background. If it fails, MessagesSuite's
-        //    manual "Clear Archive" button remains available as a fallback.
         try {
           supabase.from("manager_messages").delete().eq("user_team", team).then(() => {}, () => {});
         } catch { /* ignore — offline is fine, local state already reset */ }
@@ -2414,7 +2445,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         };
         return {
           ...prev,
-          teams: { ...prev.teams, [team]: { ...t, morale: baselineMorale, players } },
+          teams: { ...prev.teams, [team]: { ...t, morale: teamMorale, players } },
           managers: { ...(prev.managers ?? {}), [team]: nextManager },
           relations,
           leagueEvents: [...(prev.leagueEvents ?? []), evt].slice(-300),
