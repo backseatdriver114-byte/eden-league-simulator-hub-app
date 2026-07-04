@@ -2402,9 +2402,19 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         if (!t) return prev;
         const outgoing = prev.managers?.[team];
         const outgoingName = outgoing?.name ?? "the previous manager";
-        const baselineMorale = (prev.settings ?? getSettings()).moraleBaseline ?? 60;
-        // 1) Reset team + player morale to the configured baseline.
-        const players = t.players.map((p) => ({ ...p, morale: baselineMorale }));
+        const s = prev.settings ?? getSettings();
+        // Partial "new manager bounce" — mirrors triggerManagerSack: halfway
+        // recovery toward the configured managerRenewalMorale target, with a
+        // guaranteed minimum lift of +8. NOT a hard reset to 50.
+        const target = s.managerRenewalMorale ?? 60;
+        const bounce = (current: number | undefined) => {
+          const c = typeof current === "number" ? current : (s.moraleBaseline ?? 50);
+          const next = Math.max(c + 8, Math.round((c + target) / 2));
+          return Math.max(0, Math.min(100, next));
+        };
+        // 1) Partial team + player morale bounce (not a flat reset to 50).
+        const players = t.players.map((p) => ({ ...p, morale: bounce(p.morale) }));
+        const teamMorale = bounce(t.morale);
         // 2) Reset manager row: new identity, neutral respect, neutral tone.
         const nextManager = {
           ...(outgoing ?? {}),
@@ -2420,9 +2430,6 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
           if (key === team || key.includes(team)) delete relations[key];
         }
         // 4) Fire-and-forget wipe of DM history in Supabase for this team.
-        //    Non-blocking on purpose — UI updates immediately and the network
-        //    call cleans up in the background. If it fails, MessagesSuite's
-        //    manual "Clear Archive" button remains available as a fallback.
         try {
           supabase.from("manager_messages").delete().eq("user_team", team).then(() => {}, () => {});
         } catch { /* ignore — offline is fine, local state already reset */ }
@@ -2438,7 +2445,7 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         };
         return {
           ...prev,
-          teams: { ...prev.teams, [team]: { ...t, morale: baselineMorale, players } },
+          teams: { ...prev.teams, [team]: { ...t, morale: teamMorale, players } },
           managers: { ...(prev.managers ?? {}), [team]: nextManager },
           relations,
           leagueEvents: [...(prev.leagueEvents ?? []), evt].slice(-300),
