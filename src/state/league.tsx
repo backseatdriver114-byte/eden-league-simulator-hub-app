@@ -67,6 +67,12 @@ export interface LeaguePlayer {
   WR: number; AGG: number; STR: number; AER: number;
 }
 
+export interface LeagueTeamColors {
+  primary?: string | null;
+  secondary?: string | null;
+  tertiary?: string | null;
+}
+
 export interface LeagueTeam {
   name: string;
   tactical_style: string;
@@ -76,6 +82,10 @@ export interface LeagueTeam {
   lineup: string[]; // ordered slot assignments (player names; "" = empty)
   players: LeaguePlayer[];
   salaryBudget: number; // payroll cap space (set to the global hard cap)
+  // Optional per-team branding overrides. When absent, the app falls back to
+  // the seed defaults in `lib/team-branding.ts` keyed by team name.
+  logo?: string | null; // absolute URL or data URL of the crest image
+  colors?: LeagueTeamColors;
 }
 
 export interface MatchRecord {
