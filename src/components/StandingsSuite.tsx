@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLeague } from "@/state/league";
+import { TeamBadge } from "@/components/TeamBadge";
 
 const COLS: { key: string; label: string }[] = [
   { key: "rank", label: "RANK" },
@@ -67,7 +68,7 @@ function StandingsTable() {
           {standings.map((row) => (
             <tr key={row.team} className="border-b last:border-0 odd:bg-muted/40">
               <td className="px-3 py-2 text-center font-mono font-semibold tabular-nums">{row.rank}</td>
-              <td className="px-3 py-2 font-medium">{row.team}</td>
+              <td className="px-3 py-2 font-medium"><TeamBadge team={row.team} showName /></td>
               <td className="px-3 py-2 text-center tabular-nums">{row.pld}</td>
               <td className="px-3 py-2 text-center tabular-nums">{row.w}</td>
               <td className="px-3 py-2 text-center tabular-nums">{row.d}</td>
