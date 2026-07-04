@@ -86,6 +86,12 @@ export function TeamEditorSuite() {
     setMgrNameDraft(m?.name ?? "");
     setMgrDescDraft(m?.personality ?? "");
   }, [team, state.managers]);
+  useEffect(() => {
+    const c = getTeamColors(state.teams[team] ?? { name: team });
+    setPrimaryDraft(hexOrNoneDisplay(c.primary));
+    setSecondaryDraft(hexOrNoneDisplay(c.secondary));
+    setTertiaryDraft(hexOrNoneDisplay(c.tertiary));
+  }, [team, state.teams]);
 
   const t = state.teams[team];
   if (!t) return null;
