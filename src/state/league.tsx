@@ -1697,6 +1697,18 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         ...prev,
         teams: { ...prev.teams, [team]: { ...prev.teams[team], tactical_style: style } },
       })),
+    setTeamLogo: (team, logo) =>
+      update((prev) => {
+        const t = prev.teams[team];
+        if (!t) return prev;
+        return { ...prev, teams: { ...prev.teams, [team]: { ...t, logo: logo ?? null } } };
+      }),
+    setTeamColors: (team, colors) =>
+      update((prev) => {
+        const t = prev.teams[team];
+        if (!t) return prev;
+        return { ...prev, teams: { ...prev.teams, [team]: { ...t, colors: { ...colors } } } };
+      }),
     updatePlayer: (team, index, patch) =>
       update((prev) => {
         const oldName = prev.teams[team].players[index]?.name;
