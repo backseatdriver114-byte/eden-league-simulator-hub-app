@@ -90,6 +90,9 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   managerRatingVolatility: 1.0,
   pressConferenceVolatility: 1.5,
   standingsWeight: 2.2,
+
+  newsFrequency: 0.5,
+  aiProvider: "auto",
 };
 
 // Live, mutable singleton every engine reads from.
