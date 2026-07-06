@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { useLeague, DEFAULT_FORMATION } from "@/state/league";
 import { DEFAULT_SALARY_CAP } from "@/lib/contracts";
 import { DEFAULT_SETTINGS, type EngineSettings } from "@/lib/engine-settings";
 import { listVersions, deleteVersion, type LeagueVersion } from "@/lib/versions";
+import { getAiProviderStatus, type ProviderStatus } from "@/lib/ai-status.functions";
 import { SaveVersionButton } from "@/components/SaveVersionButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
