@@ -4,6 +4,7 @@ import {
 } from "@/state/league";
 import { SimulationTerminal } from "@/components/SimulationTerminal";
 import { MatchCommentaryDialog } from "@/components/MatchCommentaryDialog";
+import { TeamBadge } from "@/components/TeamBadge";
 import { downloadWeekExport } from "@/lib/league-export";
 import { Button } from "@/components/ui/button";
 import {
