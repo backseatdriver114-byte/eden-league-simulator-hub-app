@@ -1,10 +1,14 @@
 import { useState } from "react";
 import { useLeague } from "@/state/league";
 import { TeamBadge } from "@/components/TeamBadge";
+import { lastFive, currentStreak, formPillClass, gdColorStyle } from "@/lib/team-stats";
+import { getTeamColors } from "@/lib/team-branding";
 
 const COLS: { key: string; label: string }[] = [
   { key: "rank", label: "RANK" },
   { key: "team", label: "TEAM NAME" },
+  { key: "form", label: "FORM" },
+  { key: "streak", label: "STREAK" },
   { key: "pld", label: "PLD" },
   { key: "w", label: "W" },
   { key: "d", label: "D" },
@@ -51,7 +55,7 @@ export function StandingsSuite() {
 }
 
 function StandingsTable() {
-  const { standings } = useLeague();
+  const { state, standings } = useLeague();
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
       <table className="w-full border-collapse text-sm">
@@ -65,22 +69,59 @@ function StandingsTable() {
           </tr>
         </thead>
         <tbody>
-          {standings.map((row) => (
-            <tr key={row.team} className="border-b last:border-0 odd:bg-muted/40">
-              <td className="px-3 py-2 text-center font-mono font-semibold tabular-nums">{row.rank}</td>
-              <td className="px-3 py-2 font-medium"><TeamBadge team={row.team} showName /></td>
-              <td className="px-3 py-2 text-center tabular-nums">{row.pld}</td>
-              <td className="px-3 py-2 text-center tabular-nums">{row.w}</td>
-              <td className="px-3 py-2 text-center tabular-nums">{row.d}</td>
-              <td className="px-3 py-2 text-center tabular-nums">{row.l}</td>
-              <td className="px-3 py-2 text-center tabular-nums">{row.gf}</td>
-              <td className="px-3 py-2 text-center tabular-nums">{row.ga}</td>
-              <td className="px-3 py-2 text-center tabular-nums">
-                {row.gd > 0 ? `+${row.gd}` : row.gd}
-              </td>
-              <td className="px-3 py-2 text-center font-mono font-bold tabular-nums text-primary">{row.pts}</td>
-            </tr>
-          ))}
+          {standings.map((row) => {
+            const colors = getTeamColors(state.teams[row.team] ?? { name: row.team });
+            const primary = colors.primary ?? "hsl(var(--border))";
+            const form = lastFive(state, row.team);
+            const streak = currentStreak(state, row.team);
+            return (
+              <tr
+                key={row.team}
+                className="border-b last:border-0 transition-colors hover:bg-muted/50"
+                style={{
+                  borderLeft: `4px solid ${primary}`,
+                  backgroundColor: `color-mix(in oklab, ${primary} 8%, transparent)`,
+                }}
+              >
+                <td className="px-3 py-2 text-center font-mono font-semibold tabular-nums">{row.rank}</td>
+                <td className="px-3 py-2 font-medium"><TeamBadge team={row.team} showName /></td>
+                <td className="px-3 py-2">
+                  <div className="flex justify-center gap-0.5">
+                    {form.length === 0 ? <span className="text-[10px] text-muted-foreground">—</span> :
+                      form.map((r, i) => (
+                        <span
+                          key={i}
+                          className={`inline-flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold ${formPillClass(r)}`}
+                        >{r}</span>
+                      ))}
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-center">
+                  {streak ? (
+                    <span
+                      className={`inline-block rounded px-1.5 py-0.5 font-mono text-[11px] font-bold ${
+                        streak.kind === "W"
+                          ? "bg-success/20 text-success"
+                          : streak.kind === "L"
+                          ? "bg-destructive/20 text-destructive"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >{streak.kind}{streak.count}</span>
+                  ) : <span className="text-[10px] text-muted-foreground">—</span>}
+                </td>
+                <td className="px-3 py-2 text-center tabular-nums">{row.pld}</td>
+                <td className="px-3 py-2 text-center tabular-nums">{row.w}</td>
+                <td className="px-3 py-2 text-center tabular-nums">{row.d}</td>
+                <td className="px-3 py-2 text-center tabular-nums">{row.l}</td>
+                <td className="px-3 py-2 text-center tabular-nums">{row.gf}</td>
+                <td className="px-3 py-2 text-center tabular-nums">{row.ga}</td>
+                <td className="px-3 py-2 text-center font-bold tabular-nums" style={gdColorStyle(row.gd)}>
+                  {row.gd > 0 ? `+${row.gd}` : row.gd}
+                </td>
+                <td className="px-3 py-2 text-center font-mono font-bold tabular-nums text-primary">{row.pts}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -95,21 +136,21 @@ function Leaderboard({ view }: { view: Exclude<View, "standings"> }) {
       title: "Top Goal Scorers — The Golden Boot",
       rows: leaderboards.scorers,
       cols: ["Player", "Club", "Goals", "Assists"],
-      cells: (r: (typeof leaderboards.scorers)[number]) => [r.name, r.team, r.goals, r.assists],
+      cells: (r: (typeof leaderboards.scorers)[number]) => [r.name, <TeamBadge key="b" team={r.team} showName />, r.goals, r.assists],
       empty: "No goals recorded yet. Simulate matches to populate the Golden Boot race.",
     },
     assists: {
       title: "Assist Leaders",
       rows: leaderboards.assists,
       cols: ["Player", "Club", "Assists", "Goals"],
-      cells: (r: (typeof leaderboards.assists)[number]) => [r.name, r.team, r.assists, r.goals],
+      cells: (r: (typeof leaderboards.assists)[number]) => [r.name, <TeamBadge key="b" team={r.team} showName />, r.assists, r.goals],
       empty: "No assists recorded yet. Simulate matches to populate the assist chart.",
     },
     keepers: {
       title: "Top Goalkeepers — The Golden Glove",
       rows: leaderboards.keepers,
       cols: ["Keeper", "Club", "Clean Sheets", "Conceded", "Apps"],
-      cells: (r: (typeof leaderboards.keepers)[number]) => [r.name, r.team, r.cleanSheets, r.conceded, r.apps],
+      cells: (r: (typeof leaderboards.keepers)[number]) => [r.name, <TeamBadge key="b" team={r.team} showName />, r.cleanSheets, r.conceded, r.apps],
       empty: "No goalkeeper data yet. Simulate matches to populate the Golden Glove race.",
     },
   }[view];

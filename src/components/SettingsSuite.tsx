@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { useLeague, DEFAULT_FORMATION } from "@/state/league";
 import { DEFAULT_SALARY_CAP } from "@/lib/contracts";
 import { DEFAULT_SETTINGS, type EngineSettings } from "@/lib/engine-settings";
 import { listVersions, deleteVersion, type LeagueVersion } from "@/lib/versions";
+import { getAiProviderStatus, type ProviderStatus } from "@/lib/ai-status.functions";
 import { SaveVersionButton } from "@/components/SaveVersionButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -358,6 +360,29 @@ function LeagueSettings({
           </div>
         </SettingsCard>
 
+        <SettingsCard title="Newsroom (Auto-Articles)">
+          <div className="py-2">
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Auto-article frequency</span>
+              <span className="font-mono font-bold text-primary">{Math.round((s.newsFrequency ?? 0.5) * 100)}%</span>
+            </div>
+            <Slider
+              value={[(s.newsFrequency ?? 0.5) * 100]}
+              min={0}
+              max={100}
+              step={5}
+              onValueChange={([v]) => setSettings({ newsFrequency: Math.max(0, Math.min(1, v / 100)) })}
+            />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Chance an eligible event (upsets, blowouts, streaks, leader changes, trades, sackings)
+              spawns an AI-written article filed to the Newsroom archive. <span className="font-semibold text-foreground">0%</span> disables
+              all auto-articles; <span className="font-semibold text-foreground">100%</span> writes one for every event.
+            </p>
+          </div>
+        </SettingsCard>
+
+        <AiModelCard s={s} setSettings={setSettings} />
+
         <SettingsCard title="League Structure (reference)">
           <Row label="Teams" value="24 · 9v9" />
           <Row label="Default formation" value={DEFAULT_FORMATION} />
@@ -367,6 +392,110 @@ function LeagueSettings({
         </SettingsCard>
       </div>
     </div>
+  );
+}
+
+// ---------------- AI model selector (hard-pin, no fallback) ----------------
+function AiModelCard({ s, setSettings }: { s: EngineSettings; setSettings: (p: Partial<EngineSettings>) => void }) {
+  const getStatus = useServerFn(getAiProviderStatus);
+  const [providers, setProviders] = useState<ProviderStatus[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true); setErr(null);
+    try {
+      const { providers } = await getStatus();
+      setProviders(providers);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to load AI status.");
+    } finally {
+      setLoading(false);
+    }
+  }, [getStatus]);
+
+  useEffect(() => { void refresh(); const id = setInterval(() => void refresh(), 60_000); return () => clearInterval(id); }, [refresh]);
+
+  const chosen = s.aiProvider ?? "auto";
+  return (
+    <SettingsCard title="AI Model (Hard-Pinned)">
+      <p className="pt-2 text-[11px] text-muted-foreground">
+        Choose which provider handles every AI call in the app. Hard-pinned: if the chosen provider fails,
+        the call surfaces an error instead of silently falling back. Pick <span className="font-semibold text-foreground">Auto</span> to
+        keep the original multi-provider fallback chain.
+      </p>
+      <div className="py-2">
+        <button
+          type="button"
+          onClick={() => setSettings({ aiProvider: "auto" })}
+          className={`mb-2 w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+            chosen === "auto"
+              ? "border-primary bg-primary/10 font-semibold text-foreground"
+              : "border-border bg-background hover:border-primary/50"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span>Auto (fallback chain)</span>
+            <span className="rounded bg-success/20 px-2 py-0.5 text-[10px] font-bold uppercase text-success">Always ready</span>
+          </div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">
+            Tries Lovable AI first; falls through to Groq, Mistral, Gemini, OpenRouter on failure.
+          </div>
+        </button>
+        {loading && providers.length === 0 && (
+          <div className="px-1 py-2 text-[11px] text-muted-foreground">Checking provider status…</div>
+        )}
+        {providers.map((p) => {
+          const cooldownMin = Math.ceil(p.cooldownMs / 60_000);
+          const locked = !p.hasKey || p.cooldownMs > 0;
+          const isActive = chosen === p.name;
+          const status = !p.hasKey
+            ? { label: "NO KEY", tone: "muted" as const }
+            : p.reason === "credits"
+            ? { label: `CREDITS EXHAUSTED — ${cooldownMin}m`, tone: "destructive" as const }
+            : p.reason === "rate_limit"
+            ? { label: `RATE LIMITED — ${cooldownMin}m`, tone: "destructive" as const }
+            : p.reason === "error"
+            ? { label: "ERROR", tone: "destructive" as const }
+            : { label: "READY", tone: "success" as const };
+          return (
+            <button
+              key={p.name}
+              type="button"
+              disabled={locked}
+              onClick={() => setSettings({ aiProvider: p.name })}
+              className={`mb-2 w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                locked
+                  ? "cursor-not-allowed border-border bg-muted/40 opacity-60"
+                  : isActive
+                  ? "border-primary bg-primary/10 font-semibold text-foreground"
+                  : "border-border bg-background hover:border-primary/50"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span>{p.label}</span>
+                <span
+                  className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${
+                    status.tone === "success"
+                      ? "bg-success/20 text-success"
+                      : status.tone === "destructive"
+                      ? "bg-destructive/20 text-destructive"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >{status.label}</span>
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">Model: <span className="font-mono">{p.model}</span></div>
+            </button>
+          );
+        })}
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-[10px] text-muted-foreground">
+            Status auto-refreshes every 60s. {err && <span className="text-destructive">· {err}</span>}
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => void refresh()}>↻ Refresh</Button>
+        </div>
+      </div>
+    </SettingsCard>
   );
 }
 

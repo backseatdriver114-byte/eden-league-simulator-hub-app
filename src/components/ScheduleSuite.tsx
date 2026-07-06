@@ -4,6 +4,7 @@ import {
 } from "@/state/league";
 import { SimulationTerminal } from "@/components/SimulationTerminal";
 import { MatchCommentaryDialog } from "@/components/MatchCommentaryDialog";
+import { TeamBadge } from "@/components/TeamBadge";
 import { downloadWeekExport } from "@/lib/league-export";
 import { Button } from "@/components/ui/button";
 import {
@@ -111,11 +112,17 @@ export function ScheduleSuite() {
                   const manualOnly = isManualOnly(fx.home, fx.away);
                   return (
                     <li key={fx.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-4 py-2.5 text-sm">
-                      <span className="truncate text-right font-medium">{fx.home}</span>
+                      <span className="flex items-center justify-end gap-2 truncate font-medium">
+                        <span className="truncate">{fx.home}</span>
+                        <TeamBadge team={fx.home} size={20} />
+                      </span>
                       <span className="min-w-[64px] text-center font-mono font-bold tabular-nums">
                         {r ? `${r.homeGoals} - ${r.awayGoals}` : "vs"}
                       </span>
-                      <span className="truncate text-left font-medium">{fx.away}</span>
+                      <span className="flex items-center gap-2 truncate font-medium">
+                        <TeamBadge team={fx.away} size={20} />
+                        <span className="truncate">{fx.away}</span>
+                      </span>
 
                       {isActive && !r && (
                         <div className="col-span-3 mt-1 flex flex-wrap justify-center gap-2">

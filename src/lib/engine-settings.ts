@@ -46,6 +46,12 @@ export interface EngineSettings {
   managerRatingVolatility: number; // multiplier on respect drift each week (match results / standings / drift)
   pressConferenceVolatility: number; // SEPARATE multiplier applied to respectDelta from press conferences only
   standingsWeight: number; // extra weight applied to the standings pull in weekly respect drift (>=1 amplifies)
+
+  // ---- Newsroom (auto-generated articles) ----
+  newsFrequency: number; // 0..1 — probability an eligible event spawns an auto-generated article
+
+  // ---- AI provider selection ----
+  aiProvider: "auto" | "lovable" | "gemini" | "openrouter" | "groq" | "mistral"; // hard-pin choice; "auto" = fallback chain
 }
 
 export const DEFAULT_SETTINGS: EngineSettings = {
@@ -84,6 +90,9 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   managerRatingVolatility: 1.0,
   pressConferenceVolatility: 1.5,
   standingsWeight: 2.2,
+
+  newsFrequency: 0.5,
+  aiProvider: "auto",
 };
 
 // Live, mutable singleton every engine reads from.
