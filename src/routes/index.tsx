@@ -54,6 +54,7 @@ const SUITES = [
   { name: "Newsroom", render: () => <NewsSuite /> },
   { name: "Messages", render: () => <MessagesSuite /> },
   { name: "Playoffs", render: () => <PlayoffsSuite /> },
+  { name: "Trophy Room", render: () => <TrophyRoomSuite /> },
   { name: "Match Scheduling", render: () => <MatchSchedulingSuite /> },
   { name: "Contracts", render: () => <ContractsSuite /> },
   { name: "Draft", render: () => <DraftSuite /> },
@@ -69,6 +70,8 @@ function Hub() {
     <div className="min-h-screen">
       <ManagerGenerationWatcher />
       <AiPressConferenceWatcher />
+      <NewsAutogenWatcher />
+      <AiProviderSyncer />
       <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur">
         <div className="h-1 w-full" style={{ backgroundImage: "var(--gradient-rb)" }} />
         <div className="mx-auto max-w-6xl px-4 py-3">
