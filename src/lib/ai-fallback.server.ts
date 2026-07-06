@@ -1,13 +1,21 @@
-// Multi-provider AI chat completion with automatic fallback.
+// Multi-provider AI chat completion with automatic fallback + optional
+// hard-pin (chosen from the Settings suite AI Model panel).
 //
-// Order: Lovable AI → Groq → Mistral → Gemini → OpenRouter.
-// Per the user's spec, "structured" calls (handlers that parse JSON from the
-// model's reply) skip Groq because Llama is the weakest at strict JSON.
+// Order (auto mode): Lovable AI → Groq → Mistral → Gemini → OpenRouter.
+// "structured" calls (handlers that parse JSON from the model's reply)
+// skip Groq because Llama is the weakest at strict JSON.
+//
+// Hard-pin: the client passes `X-AI-Provider: <name>` on every server-fn call
+// via the attachAiProvider middleware (registered in src/start.ts). When set,
+// ONLY that provider is tried and its failures throw directly.
 //
 // When a non-Lovable provider successfully handles the request, we set an
 // X-AI-Provider response header so the client can surface a notification.
+// When any provider returns 402/429, we also record a cooldown in the
+// per-Worker in-memory status book so the Settings selector can grey it out.
 
-import { setResponseHeader } from "@tanstack/react-start/server";
+import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
+import { markProviderDown } from "./ai-provider-status.server";
 
 export type AiProvider = "lovable" | "gemini" | "openrouter" | "groq" | "mistral";
 
@@ -77,8 +85,15 @@ const PROVIDERS: ProviderSpec[] = [
       "X-Title": "Eden League Data Hub",
     }),
   },
-
 ];
+
+const PROVIDER_BY_NAME: Record<string, ProviderSpec> = Object.fromEntries(
+  PROVIDERS.map((p) => [p.name, p]),
+);
+
+// 10-minute cooldown after a 402 (credits); 60s after a 429 (rate-limit).
+const CREDITS_COOLDOWN_MS = 10 * 60 * 1000;
+const RATE_LIMIT_COOLDOWN_MS = 60 * 1000;
 
 function publishProvider(p: AiProvider) {
   // Only surface a switch — Lovable success is the silent default.
@@ -89,6 +104,21 @@ function publishProvider(p: AiProvider) {
   } catch {
     // setResponseHeader throws outside request context; safe to ignore.
   }
+}
+
+// Read the hard-pin choice off the request header (attached client-side by
+// middleware). Empty / "auto" / unknown => full fallback chain.
+function readPinnedProvider(): AiProvider | null {
+  try {
+    const raw = getRequestHeader("x-ai-provider");
+    if (!raw) return null;
+    const name = String(raw).trim().toLowerCase();
+    if (!name || name === "auto") return null;
+    if (name in PROVIDER_BY_NAME) return name as AiProvider;
+  } catch {
+    // getRequestHeader throws outside request context; safe to ignore.
+  }
+  return null;
 }
 
 async function callOne(
@@ -118,6 +148,12 @@ async function callOne(
   clearTimeout(timer);
 
   if (res.status === 402 || res.status === 429) {
+    // Record cooldown for the Settings status panel.
+    markProviderDown(
+      spec.name,
+      res.status === 402 ? "credits" : "rate_limit",
+      res.status === 402 ? CREDITS_COOLDOWN_MS : RATE_LIMIT_COOLDOWN_MS,
+    );
     return { ok: false, status: res.status, retryable: true, detail: res.status === 402 ? "credits" : "rate_limit" };
   }
   if (!res.ok) {
@@ -140,18 +176,31 @@ async function callOne(
 export async function chatCompletion(
   args: ChatArgs,
 ): Promise<{ content: string; provider: AiProvider }> {
-  const chain = PROVIDERS.filter((p) => !(args.structured && p.skipForStructured));
+  const pinned = readPinnedProvider();
 
   // Inject a global content policy as the FIRST system message so every AI
-  // call — managers, players, journalists, agents — stays kid-movie clean
-  // without losing the "harsh" personalities the league depends on.
-  const policy: ChatMessage = {
-    role: "system",
-    content: CONTENT_POLICY,
-  };
+  // call stays kid-movie clean without losing the "harsh" personalities.
+  const policy: ChatMessage = { role: "system", content: CONTENT_POLICY };
   const messages: ChatMessage[] = [policy, ...args.messages];
   const finalArgs: ChatArgs = { ...args, messages };
 
+  // ---- HARD-PIN branch: only try the chosen provider, do NOT fall back. ----
+  if (pinned) {
+    const spec = PROVIDER_BY_NAME[pinned];
+    const key = process.env[spec.envKey];
+    if (!key) throw new Error(`AI provider "${pinned}" has no API key configured.`);
+    const result = await callOne(spec, key, finalArgs);
+    if (result.ok) {
+      publishProvider(spec.name);
+      return { content: result.content, provider: spec.name };
+    }
+    if (result.detail === "credits") throw new Error("CREDITS");
+    if (result.detail === "rate_limit") throw new Error("RATE_LIMIT");
+    throw new Error(`AI provider "${pinned}" failed — ${result.status}: ${result.detail}`);
+  }
+
+  // ---- AUTO branch: full fallback chain. ----
+  const chain = PROVIDERS.filter((p) => !(args.structured && p.skipForStructured));
   const skipped: string[] = [];
   let lastFatal: string | null = null;
   let creditsHit = false;
@@ -159,10 +208,7 @@ export async function chatCompletion(
 
   for (const spec of chain) {
     const key = process.env[spec.envKey];
-    if (!key) {
-      skipped.push(`${spec.name}: no key`);
-      continue;
-    }
+    if (!key) { skipped.push(`${spec.name}: no key`); continue; }
     const result = await callOne(spec, key, finalArgs);
     if (result.ok) {
       publishProvider(spec.name);
@@ -177,12 +223,11 @@ export async function chatCompletion(
     }
   }
 
-  // Preserve the existing error-code contract so NotificationCenter still pops
-  // the right toast on total failure.
   if (creditsHit && !rateHit) throw new Error("CREDITS");
   if (rateHit && !creditsHit) throw new Error("RATE_LIMIT");
   throw new Error(`AI providers exhausted${lastFatal ? ` — ${lastFatal}` : ""} [${skipped.join(" | ")}]`);
 }
+
 
 // Global language policy applied to every AI call. The goal is to keep all
 // generated text clean enough for a kids' movie WITHOUT softening the
