@@ -662,6 +662,8 @@ function normalize(state: LeagueState): LeagueState {
       age: p.age ?? 25,
       salary: p.salary ?? calculateMarketValue(p.rating ?? 5),
       contractYears: p.contractYears ?? 0,
+      // v8 engine field. Seed BCO from OVR on any legacy save that lacks it.
+      BCO: (p as Partial<LeaguePlayer>).BCO ?? Math.round((p.rating ?? 5) * 10) / 10,
     };
     // Guard age with > 0 (not truthiness) so a persisted age of 0 isn't re-rolled.
     const withAge = player.age != null && player.age > 0 ? player : { ...player, age: computeStartingAge(player) };
