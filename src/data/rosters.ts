@@ -1,5 +1,5 @@
 // AUTO-GENERATED from EDEN LEAGUE SIMULATION ENGINE v6.2.1 — DO NOT alter values.
-export interface RawPlayer { name: string; position: string; rating: number; FIN: number; SHO: number; PAS: number; VIS: number; DRI: number; PAC: number; STA: number; DEF: number; TAC: number; POS_attr: number; COM: number; WR: number; AGG: number; STR: number; AER: number; }
+export interface RawPlayer { name: string; position: string; rating: number; FIN: number; SHO: number; PAS: number; VIS: number; DRI: number; PAC: number; STA: number; DEF: number; TAC: number; POS_attr: number; COM: number; WR: number; AGG: number; STR: number; AER: number; BCO?: number; }
 export interface RawTeam { name: string; tactical_style: string; roster: RawPlayer[]; }
 export const RAW_TEAMS: RawTeam[] = [
   { name: "Spams", tactical_style: "Balanced", roster: [

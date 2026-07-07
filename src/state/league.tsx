@@ -20,6 +20,8 @@ import {
 import { initializeContracts, calculateMarketValue, payrollOf, runContractCycle as runCycle, type ContractAction } from "@/lib/contracts";
 import { applySettings, getSettings, DEFAULT_SETTINGS, settings as engineSettings, isManualSimTeam, isContractExempt, type EngineSettings } from "@/lib/engine-settings";
 import { nextRelation, clampRespect } from "@/lib/relations";
+import { backfillDays, isTransferWindowOpen, type MatchDay as DayCode } from "@/lib/day-schedule";
+import { computeMatchResultDeltas } from "@/lib/match-result-effects";
 
 const STORAGE_KEY = "eden_league_state_v6";
 const LEGACY_STORAGE_KEYS = ["eden_league_state_v5", "eden_league_state_v4", "eden_league_state_v3", "eden_league_state_v2", "eden_league_state_v1"];
@@ -39,7 +41,7 @@ const MAX_UNDO = 1000;
 
 export const ATTR_KEYS = [
   "rating", "FIN", "SHO", "PAS", "VIS", "DRI", "PAC", "STA",
-  "DEF", "TAC", "POS_attr", "COM", "WR", "AGG", "STR", "AER",
+  "DEF", "TAC", "POS_attr", "COM", "WR", "AGG", "STR", "AER", "BCO",
 ] as const;
 export type AttrKey = (typeof ATTR_KEYS)[number];
 
@@ -65,6 +67,9 @@ export interface LeaguePlayer {
   rating: number; FIN: number; SHO: number; PAS: number; VIS: number; DRI: number;
   PAC: number; STA: number; DEF: number; TAC: number; POS_attr: number; COM: number;
   WR: number; AGG: number; STR: number; AER: number;
+  // Ball Control — v8 engine attribute. Backfilled to `rating` on migration
+  // so old saves stay valid; the user tunes it manually in Team Editor / Draft.
+  BCO: number;
 }
 
 export interface LeagueTeamColors {
@@ -94,11 +99,16 @@ export interface MatchRecord {
   method: "SIM" | "MANUAL";
 }
 
+export type MatchDay = "MON" | "WED" | "FRI" | "SAT";
+
 export interface FixtureEntry {
   id: string;
   week: number;
   home: string;
   away: string;
+  // Day of the week the match is played. Optional on legacy saves; the
+  // normalizer backfills it via `lib/day-schedule.ts`.
+  day?: MatchDay;
 }
 
 export interface PlayoffMatch {
@@ -513,7 +523,7 @@ export function blankPlayer(): LeaguePlayer {
     salary: 5.0, contractYears: 2,
     rating: 5.0, FIN: 5.0, SHO: 5.0, PAS: 5.0, VIS: 5.0, DRI: 5.0,
     PAC: 5.0, STA: 5.0, DEF: 5.0, TAC: 5.0, POS_attr: 5.0, COM: 5.0,
-    WR: 5.0, AGG: 5.0, STR: 5.0, AER: 5.0,
+    WR: 5.0, AGG: 5.0, STR: 5.0, AER: 5.0, BCO: 5.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
@@ -527,7 +537,7 @@ export function youthPlayer(): LeaguePlayer {
     salary: 1.0, contractYears: 1,
     rating: 1.0, FIN: 1.0, SHO: 1.0, PAS: 1.0, VIS: 1.0, DRI: 1.0,
     PAC: 1.0, STA: 1.0, DEF: 1.0, TAC: 1.0, POS_attr: 1.0, COM: 1.0,
-    WR: 1.0, AGG: 1.0, STR: 1.0, AER: 1.0,
+    WR: 1.0, AGG: 1.0, STR: 1.0, AER: 1.0, BCO: 1.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
@@ -565,7 +575,7 @@ export function prospectPlayer(): LeaguePlayer {
     salary: 2.0, contractYears: 2,
     rating: 6.0, FIN: 6.0, SHO: 6.0, PAS: 6.0, VIS: 6.0, DRI: 6.0,
     PAC: 6.0, STA: 6.0, DEF: 6.0, TAC: 6.0, POS_attr: 6.0, COM: 6.0,
-    WR: 6.0, AGG: 6.0, STR: 6.0, AER: 6.0,
+    WR: 6.0, AGG: 6.0, STR: 6.0, AER: 6.0, BCO: 6.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
@@ -602,6 +612,8 @@ export function initState(): LeagueState {
         rating: p.rating, FIN: p.FIN, SHO: p.SHO, PAS: p.PAS, VIS: p.VIS, DRI: p.DRI,
         PAC: p.PAC, STA: p.STA, DEF: p.DEF, TAC: p.TAC, POS_attr: p.POS_attr, COM: p.COM,
         WR: p.WR, AGG: p.AGG, STR: p.STR, AER: p.AER,
+        // v8 engine attribute — seeded from OVR; user tunes it in Team Editor.
+        BCO: p.BCO ?? p.rating,
       };
       const withAge = { ...player, age: computeStartingAge(player) };
       return { ...withAge, rating: computeOverall(withAge) };
@@ -652,6 +664,8 @@ function normalize(state: LeagueState): LeagueState {
       age: p.age ?? 25,
       salary: p.salary ?? calculateMarketValue(p.rating ?? 5),
       contractYears: p.contractYears ?? 0,
+      // v8 engine field. Seed BCO from OVR on any legacy save that lacks it.
+      BCO: (p as Partial<LeaguePlayer>).BCO ?? Math.round((p.rating ?? 5) * 10) / 10,
     };
     // Guard age with > 0 (not truthiness) so a persisted age of 0 isn't re-rolled.
     const withAge = player.age != null && player.age > 0 ? player : { ...player, age: computeStartingAge(player) };
@@ -699,6 +713,17 @@ function normalize(state: LeagueState): LeagueState {
   for (const name of state.teamOrder) {
     managers[name] = state.managers?.[name] ?? seededManagers[name];
   }
+  // Backfill day-of-week on every fixture (2 MON, 3 WED, 1 FRI, 6 SAT).
+  // The Friday slot is picked as the marquee via `pickMarqueeFixture` inside
+  // `backfillDays`. Fixtures that already carry a day are preserved.
+  const preStandings = computeStandingsRaw(state.fixtures, state.results, state.teamOrder);
+  const strengthOf = (t: string) => {
+    const tt = outTeams[t];
+    if (!tt) return 5;
+    const top = [...tt.players].sort((a, b) => b.rating - a.rating).slice(0, 9);
+    return top.length ? top.reduce((s, p) => s + p.rating, 0) / top.length : 5;
+  };
+  const fixturesWithDays = backfillDays(state.fixtures ?? [], preStandings, strengthOf);
   return {
     ...state,
     season: state.season ?? 1,
@@ -708,6 +733,7 @@ function normalize(state: LeagueState): LeagueState {
     undoStack: state.undoStack ?? [],
     redoStack: state.redoStack ?? [],
     teams: outTeams,
+    fixtures: fixturesWithDays,
     salaryCap,
     freeAgents: (state.freeAgents ?? []).map(normalizePlayer),
     contractsInitialized,
@@ -727,6 +753,34 @@ function normalize(state: LeagueState): LeagueState {
         }
       : undefined,
   };
+}
+
+// Slim standings computation used by the normalizer without needing a full
+// state object (avoids a circular init). Same tie-break rules as
+// computeStandings so the results align.
+function computeStandingsRaw(
+  fixtures: FixtureEntry[],
+  results: Record<string, MatchRecord>,
+  teamOrder: string[],
+): StandingRow[] {
+  const rows: Record<string, StandingRow> = {};
+  teamOrder.forEach((n) => {
+    rows[n] = { rank: 0, team: n, pld: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 };
+  });
+  for (const fx of fixtures) {
+    const r = results[fx.id]; if (!r) continue;
+    const h = rows[fx.home]; const a = rows[fx.away]; if (!h || !a) continue;
+    h.pld++; a.pld++; h.gf += r.homeGoals; h.ga += r.awayGoals;
+    a.gf += r.awayGoals; a.ga += r.homeGoals;
+    if (r.homeGoals > r.awayGoals) { h.w++; a.l++; h.pts += 3; }
+    else if (r.homeGoals < r.awayGoals) { a.w++; h.l++; a.pts += 3; }
+    else { h.d++; a.d++; h.pts++; a.pts++; }
+  }
+  const list = Object.values(rows);
+  list.forEach((row) => { row.gd = row.gf - row.ga; });
+  list.sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf || x.team.localeCompare(y.team));
+  list.forEach((row, i) => { row.rank = i + 1; });
+  return list;
 }
 
 function loadState(): LeagueState {
@@ -1115,10 +1169,10 @@ interface LeagueContextValue {
   addYouthPlayer: (team: string) => void;
   removePlayer: (team: string, index: number) => void;
   renameTeam: (oldName: string, newName: string) => void;
-  addFixtures: (entries: { week: number; home: string; away: string }[]) => void;
+  addFixtures: (entries: { week: number; home: string; away: string; day?: DayCode }[]) => void;
   removeFixture: (fixtureId: string) => void;
-  scheduleFinalFour: (entries: { week: number; home: string; away: string }[]) => void;
-  scheduleNewSeason: (entries: { week: number; home: string; away: string }[]) => void;
+  scheduleFinalFour: (entries: { week: number; home: string; away: string; day?: DayCode }[]) => void;
+  scheduleNewSeason: (entries: { week: number; home: string; away: string; day?: DayCode }[]) => void;
   startNewSeason: () => void;
   generatePlayoffs: () => void;
   setPlayoffResult: (matchId: string, homeGoals: number, awayGoals: number, method: "SIM" | "MANUAL", payload?: MatchPayload) => void;
@@ -1260,6 +1314,9 @@ function moveTrade(
   bPickIds: string[] = []
 ): LeagueState {
   if (aName === bName) return prev;
+  // Transfer window enforcement: blocks all trades if we're past the
+  // configured last week of the window (Settings suite).
+  if (!isTransferWindowOpen(prev)) return prev;
   const teamA = prev.teams[aName];
   const teamB = prev.teams[bName];
   if (!teamA || !teamB) return prev;
@@ -1641,13 +1698,39 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         const { teams, protectedKeys } = applyMatchEffects(
           prev.teams, payload, payload?.injuries, prev.currentWeek
         );
-        const moraleTeams = fixture
+        let moraleTeams = fixture
           ? applyMatchMorale(teams, preStandings, fixture.home, fixture.away, homeGoals, awayGoals, payload)
           : teams;
+        let managers = withPendingSacks(prev.managers);
+        // NEW: match-result driven volatility. Independent of the standings /
+        // press-driven sliders — controlled by matchResultMoraleVolatility
+        // and matchResultManagerVolatility. Ensures a new manager on a top
+        // team can still gain respect from lopsided wins.
+        if (fixture) {
+          const deltas = computeMatchResultDeltas(prev, preStandings, fixture.home, fixture.away, homeGoals, awayGoals);
+          const moraleMult = prev.settings?.matchResultMoraleVolatility ?? 1.5;
+          const respectMult = prev.settings?.matchResultManagerVolatility ?? 1.5;
+          const applySide = (teamName: string, d: { respect: number; teamMorale: number; playerMorale: number }) => {
+            const t = moraleTeams[teamName]; if (!t) return;
+            const newTeamMorale = clampMorale(t.morale + d.teamMorale * moraleMult);
+            const newPlayers = t.players.map((p) => ({
+              ...p,
+              morale: clampMorale(p.morale + d.playerMorale * moraleMult),
+            }));
+            moraleTeams = { ...moraleTeams, [teamName]: { ...t, morale: newTeamMorale, players: newPlayers } };
+            const mgr = managers[teamName];
+            if (mgr && (mgr.personality ?? "").trim().toUpperCase() !== "USER CONTROLLED") {
+              const respect = clampRespect((typeof mgr.respect === "number" ? mgr.respect : 50) + d.respect * respectMult);
+              managers = { ...managers, [teamName]: { ...mgr, respect } };
+            }
+          };
+          applySide(fixture.home, deltas.home);
+          applySide(fixture.away, deltas.away);
+        }
         const next: LeagueState = {
           ...prev,
           teams: moraleTeams,
-          managers: withPendingSacks(prev.managers),
+          managers,
           results: { ...prev.results, [fixtureId]: { homeGoals, awayGoals, method } },
           payloads: payload ? { ...prev.payloads, [fixtureId]: payload } : prev.payloads,
         };
@@ -1862,8 +1945,19 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
           week: e.week,
           home: e.home,
           away: e.away,
+          day: e.day,
         }));
-        return advanceWeekIfComplete({ ...prev, fixtures: [...prev.fixtures, ...added] }, new Set());
+        const merged = [...prev.fixtures, ...added];
+        // Re-run day backfill so any newly added fixtures without explicit
+        // days get slotted into the week's 2/3/1/6 quota.
+        const preStandings = computeStandings({ ...prev, fixtures: merged, results: prev.results } as LeagueState);
+        const strength = (t: string) => {
+          const tt = prev.teams[t]; if (!tt) return 5;
+          const top = [...tt.players].sort((a,b)=>b.rating-a.rating).slice(0,9);
+          return top.length ? top.reduce((s,p)=>s+p.rating,0)/top.length : 5;
+        };
+        const fixtures = backfillDays(merged, preStandings, strength);
+        return advanceWeekIfComplete({ ...prev, fixtures }, new Set());
       }),
     removeFixture: (fixtureId) =>
       update((prev) => {
@@ -1882,8 +1976,17 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
           week: e.week,
           home: e.home,
           away: e.away,
+          day: e.day,
         }));
-        return advanceWeekIfComplete({ ...prev, fixtures: [...prev.fixtures, ...added] }, new Set());
+        const merged = [...prev.fixtures, ...added];
+        const preStandings = computeStandings({ ...prev, fixtures: merged } as LeagueState);
+        const strength = (t: string) => {
+          const tt = prev.teams[t]; if (!tt) return 5;
+          const top = [...tt.players].sort((a,b)=>b.rating-a.rating).slice(0,9);
+          return top.length ? top.reduce((s,p)=>s+p.rating,0)/top.length : 5;
+        };
+        const fixtures = backfillDays(merged, preStandings, strength);
+        return advanceWeekIfComplete({ ...prev, fixtures }, new Set());
       }),
     scheduleNewSeason: (entries) =>
       update((prev) => {
@@ -1893,12 +1996,19 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         for (const name of prev.teamOrder) {
           teams[name] = offseasonTeam(prev.teams[name]);
         }
-        const fixtures: FixtureEntry[] = entries.map((e, i) => ({
+        const rawFixtures: FixtureEntry[] = entries.map((e, i) => ({
           id: `s${season}-w${e.week}-m${i}-${Date.now() + i}`,
           week: e.week,
           home: e.home,
           away: e.away,
+          day: e.day,
         }));
+        const strength = (t: string) => {
+          const tt = teams[t]; if (!tt) return 5;
+          const top = [...tt.players].sort((a,b)=>b.rating-a.rating).slice(0,9);
+          return top.length ? top.reduce((s,p)=>s+p.rating,0)/top.length : 5;
+        };
+        const fixtures = backfillDays(rawFixtures, [], strength);
         return {
           ...prev,
           season,
