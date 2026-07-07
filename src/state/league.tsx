@@ -97,11 +97,16 @@ export interface MatchRecord {
   method: "SIM" | "MANUAL";
 }
 
+export type MatchDay = "MON" | "WED" | "FRI" | "SAT";
+
 export interface FixtureEntry {
   id: string;
   week: number;
   home: string;
   away: string;
+  // Day of the week the match is played. Optional on legacy saves; the
+  // normalizer backfills it via `lib/day-schedule.ts`.
+  day?: MatchDay;
 }
 
 export interface PlayoffMatch {
