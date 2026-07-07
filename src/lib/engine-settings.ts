@@ -92,10 +92,12 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   relationsVolatility: 1.0,
   pressInfluenceBaseline: 1.0,
   managerRatingVolatility: 1.0,
+  matchResultManagerVolatility: 1.5,
   pressConferenceVolatility: 1.5,
   standingsWeight: 2.2,
 
   newsFrequency: 0.5,
+  matchResultMoraleVolatility: 1.5,
   aiProvider: "auto",
 };
 
