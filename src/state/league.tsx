@@ -1169,10 +1169,10 @@ interface LeagueContextValue {
   addYouthPlayer: (team: string) => void;
   removePlayer: (team: string, index: number) => void;
   renameTeam: (oldName: string, newName: string) => void;
-  addFixtures: (entries: { week: number; home: string; away: string }[]) => void;
+  addFixtures: (entries: { week: number; home: string; away: string; day?: DayCode }[]) => void;
   removeFixture: (fixtureId: string) => void;
-  scheduleFinalFour: (entries: { week: number; home: string; away: string }[]) => void;
-  scheduleNewSeason: (entries: { week: number; home: string; away: string }[]) => void;
+  scheduleFinalFour: (entries: { week: number; home: string; away: string; day?: DayCode }[]) => void;
+  scheduleNewSeason: (entries: { week: number; home: string; away: string; day?: DayCode }[]) => void;
   startNewSeason: () => void;
   generatePlayoffs: () => void;
   setPlayoffResult: (matchId: string, homeGoals: number, awayGoals: number, method: "SIM" | "MANUAL", payload?: MatchPayload) => void;
