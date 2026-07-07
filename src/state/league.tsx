@@ -39,7 +39,7 @@ const MAX_UNDO = 1000;
 
 export const ATTR_KEYS = [
   "rating", "FIN", "SHO", "PAS", "VIS", "DRI", "PAC", "STA",
-  "DEF", "TAC", "POS_attr", "COM", "WR", "AGG", "STR", "AER",
+  "DEF", "TAC", "POS_attr", "COM", "WR", "AGG", "STR", "AER", "BCO",
 ] as const;
 export type AttrKey = (typeof ATTR_KEYS)[number];
 
