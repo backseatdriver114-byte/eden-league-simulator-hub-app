@@ -605,6 +605,8 @@ export function initState(): LeagueState {
         rating: p.rating, FIN: p.FIN, SHO: p.SHO, PAS: p.PAS, VIS: p.VIS, DRI: p.DRI,
         PAC: p.PAC, STA: p.STA, DEF: p.DEF, TAC: p.TAC, POS_attr: p.POS_attr, COM: p.COM,
         WR: p.WR, AGG: p.AGG, STR: p.STR, AER: p.AER,
+        // v8 engine attribute — seeded from OVR; user tunes it in Team Editor.
+        BCO: p.BCO ?? p.rating,
       };
       const withAge = { ...player, age: computeStartingAge(player) };
       return { ...withAge, rating: computeOverall(withAge) };
