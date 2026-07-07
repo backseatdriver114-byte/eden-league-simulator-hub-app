@@ -20,6 +20,8 @@ import {
 import { initializeContracts, calculateMarketValue, payrollOf, runContractCycle as runCycle, type ContractAction } from "@/lib/contracts";
 import { applySettings, getSettings, DEFAULT_SETTINGS, settings as engineSettings, isManualSimTeam, isContractExempt, type EngineSettings } from "@/lib/engine-settings";
 import { nextRelation, clampRespect } from "@/lib/relations";
+import { backfillDays, isTransferWindowOpen, type MatchDay as DayCode } from "@/lib/day-schedule";
+import { computeMatchResultDeltas } from "@/lib/match-result-effects";
 
 const STORAGE_KEY = "eden_league_state_v6";
 const LEGACY_STORAGE_KEYS = ["eden_league_state_v5", "eden_league_state_v4", "eden_league_state_v3", "eden_league_state_v2", "eden_league_state_v1"];
