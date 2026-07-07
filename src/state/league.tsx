@@ -516,7 +516,7 @@ export function blankPlayer(): LeaguePlayer {
     salary: 5.0, contractYears: 2,
     rating: 5.0, FIN: 5.0, SHO: 5.0, PAS: 5.0, VIS: 5.0, DRI: 5.0,
     PAC: 5.0, STA: 5.0, DEF: 5.0, TAC: 5.0, POS_attr: 5.0, COM: 5.0,
-    WR: 5.0, AGG: 5.0, STR: 5.0, AER: 5.0,
+    WR: 5.0, AGG: 5.0, STR: 5.0, AER: 5.0, BCO: 5.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
