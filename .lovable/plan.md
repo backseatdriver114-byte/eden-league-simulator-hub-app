@@ -1,88 +1,85 @@
-## Scope
 
-Building today, from your picks:
+# Daily Timeline Redesign — Implementation Plan
 
-1. **Logos + colors everywhere teams appear**
-2. **Medium team-color theming** (row/card tints, primary borders)
-3. **Better League Table** — Form (last 5 W/D/L pills), Streak, GD color
-4. **Team Editor redesign** — Club Info card + roster/stats panels
-5. **Trophy Room / League History** (backfilled from existing state) — Champions, Golden Boot/Glove, MVP, per-club trophy case
-6. **News auto-gen** — match results, streaks, standings shifts, trades/sackings — with **frequency slider** in Settings
-7. **AI model selector** — hard-pinned (no fallback), locked options for missing keys / credit-exhausted / rate-limited providers
+## 1. Time system (day-of-week for every fixture)
 
-Explicitly **not** in scope: Stats Center, Dashboard landing, Season timeline, dynamic stadiums, honors/mascots/rivalries, xG, VAR, and anything else needing data you haven't provided.
+State: extend `FixtureEntry` with `day: "MON"|"WED"|"FRI"|"SAT"`. Add `state.currentDay` alongside `state.currentWeek`. Advance day-by-day; a week rolls over when SAT finishes.
 
----
+Backfill migration in `state/league.tsx` normalizer: for any existing fixture missing `day`, randomly distribute per-week into the 2/0/3/0/1/6/0 quota; Friday slot chosen by **closest-in-standings, highest-in-table** heuristic (fallback: highest combined team OVR when standings are empty).
 
-## Implementation
+Quota validator (2 MON, 3 WED, 1 FRI, 6 SAT) shared by:
+- Match Scheduling builder — new day dropdown per fixture (Mon/Wed/Fri/Sat only). Save button disabled with a per-day counter chip when a day is over-full, same UX as the current 12-per-week check.
+- Any state mutator that adds fixtures.
 
-### 1. Badges everywhere
+## 2. Suite reordering + merges + renames
 
-Drop `<TeamBadge>` into every remaining team-name site:
+New nav order in `src/state/navigation.tsx`:
+Season Schedule → Standings → Team Editor → Newsroom → Messages → Negotiation → Trades → Simulation Terminal → Contracts → Match Scheduling → Draft → League History → Settings.
 
-- `ScheduleSuite`, `MatchSchedulingSuite`, `PlayoffsSuite`, `TradesSuite`, `ContractsSuite`, `NegotiationSuite`, `MessagesSuite`, `NewsSuite`, `SimulationTerminal` scoreline, `PlayerSearch` result rows, `TeamEditorSuite` header.
-- Consistent sizes: 20px inline lists, 28px cards, 48px team-page hero.
+- **Playoffs suite removed** as a standalone. `ScheduleSuite` renders `PlayoffsSuite` content when `state.currentWeek >= 17` (post Final-Four); Final Four itself stays inside Schedule as today. The two files stay, but only Schedule is registered in nav.
+- **Trophy Room → League History**. Owns: existing trophy content + season-end auto SAVE VERSION + AI season-summary + the **version archive list** moved out of Settings.
+- **Settings & Version Archives → Settings** (archive UI/state moves to League History; the manual SAVE VERSION button in the header stays).
 
-### 2. Medium team-color theming
+## 3. Season Schedule visuals
 
-Extend `TeamBadge` behavior via a new `<TeamRow>` wrapper that applies:
+Each fixture row rendered as two 50/50 halves tinted with each club's primary color (mirrors the Standings row treatment, medium intensity). Day label chip on the left of each row grouped under a `MON / WED / FRI / SAT` sub-header within each week block.
 
-- `border-left: 3px solid var(--team-primary)`
-- `background: color-mix(in oklab, var(--team-primary) 8%, transparent)` on hover / active
-- Used in standings rows, schedule slots, roster tables, trade/negotiation cards.
+## 4. Newsroom — daily press-conference windows
 
-Match slots in `MatchSchedulingSuite` and Simulation Terminal show both clubs' primary colors as a thin split accent bar (top edge).
+`press-conference.functions.ts` gate:
+- Pre-match: available on `day-before` and `day-of` (same week only), disappears once attended or match played.
+- Post-match: available on `day-of` only after the result is logged.
+- New auto-generated **weekly roundup article** triggered when SAT of a week ends (routed through existing `news.functions.ts` + `NewsAutogenWatcher`).
 
-### 3. Better League Table
+Tone fix in `press-brief.ts`: rewrite the question-mix instructions to require a bull/bear/neutral spread (roughly 30/40/30) instead of only critical framings.
 
-`StandingsSuite`: add three columns:
+**Manager-name freshness fix**: `press-brief.ts` and `negotiation-brief.ts` now inject a `CURRENT REALITY` block sourced live from Team Editor (current manager name, current roster, current record) and instruct the model: past information is historical context only; the Team Editor snapshot is ground truth for names/roles/rosters. Same block also appended to `news-brief.ts`.
 
-- **Form**: 5 small pills (green W, gray D, red L) from last 5 completed matches per team.
-- **Streak**: e.g. `W3`, `L2`, `D1`, colored.
-- **GD**: text color scaled green→red by value.
+**No-stats acknowledgement**: `press-brief.ts` adds an explicit note — "This club logs results manually; per-player goals/assists/saves are intentionally absent. Do not press the user on missing box-score stats; treat aggregate results as the record of record."
 
-Make sure team colors are implemented here heavily, the team slots should be in team colors.
+## 5. Trades — behind-the-scenes GM negotiation
 
-### 4. Team Editor redesign
+Replace the accept/decline coin-flip in `trade-ai.functions.ts` with a private negotiation loop (silent, no UI, no press): iterate 3–6 offer/counter rounds using the existing agent-negotiation scoring adapted to team needs (positional gap, budget, OVR delta). Only when both sides converge does a proposal surface in the Trades suite for user finalize/veto. If they diverge, nothing surfaces.
 
-`TeamEditorSuite`: reorganize into a **Club Info card** (logo picker, 3 hex colors, name, manager, description text field added to `LeagueTeam`) + existing **Roster** + **Quick Stats** side panels (record, top scorer, form, next fixture — pulled from state). No new engine data.
+## 6. Engine v8 — BCO (Ball Control)
 
-### 5. Trophy Room + League History
+- Extend `LeaguePlayer` with `BCO: number`.
+- Migration: for every existing player, `BCO = round(rating)` (state normalizer).
+- UI: add BCO input to Team Editor player rows AND Draft prospect rows.
+- Ratings: leave `computeOverall` weights alone for now (BCO not in weight maps unless user asks) — user said "we'll edit manually from there".
+- Sim engine bridge (`src/engine/engine.ts`): pass BCO through wherever attributes are serialized; port v8 usages of BCO from the uploaded Python (dribble/turnover/carry checks) line-for-line.
 
-- Extend state with `history: { seasons: SeasonRecord[] }` where `SeasonRecord = { season, champion, runnerUp, finalFour, goldenBoot: {player, team, goals}, goldenGlove: {player, team, ga}, mvp: {player, team, score} }`.
-- **Backfill**: on load, if `history` empty, derive whatever we can from current completed weeks (current-season standings + player stats become the "in-progress" record shown, and any prior season data already in state is carried forward).
-- Hook season-end (existing playoffs completion path) to append a `SeasonRecord`.
-- New **Trophy Room suite** slotted into the existing left/right suite navigator:
-  - Top: season champions timeline
-  - Middle: award winners per season
-  - Bottom: per-club trophy case grid (24 cards, each showing that club's titles + years).
+## 7. Transfer window enforcement
 
-### 6. News auto-gen + frequency slider
+`SettingsSuite` slider already stores `transferWindowWeek`. Add a shared `isTransferWindowOpen(state, settings)` helper (`currentWeek <= transferWindowWeek`). Gate at the mutator layer in `state/league.tsx` — every trade-accept, contract-sign, and free-agent-sign path checks this and no-ops with a toast when closed. UI buttons disable + show reason.
 
-- New module `src/lib/news-autogen.ts` with event detectors called from existing simulation and state mutators:
-  - `onMatchComplete` → chance-based article for upsets (rating gap ≥ threshold), 3+ goal wins, comebacks
-  - `onStandingsUpdate` → new leader / cutoff crossings
-  - `onStreakUpdate` → win streak ≥ 3, unbeaten ≥ 5
-  - `onTradeCompleted`, `onManagerFired` → always emit
-- Each detector rolls against `settings.newsFrequency` (0..1). At 0, no auto-articles; at 1, every eligible event.
-- Uses existing `news.functions.ts` AI pipeline; articles land in `NewsSuite`.
-- Add slider `NEWS ARTICLE FREQUENCY` to `SettingsSuite` (0–100%, default 50%).
+## 8. Match-result-driven volatility
 
-### 7. AI model selector (hard-pinned)
+Add two new sliders (default 0.5):
+- Manager & Influence → **Match Result Volatility** (`matchResultManagerVolatility`).
+- Morale → **Match Result Volatility** (`matchResultMoraleVolatility`).
 
-- Add `settings.aiModel: { chatModel, structuredModel }` with a curated allowlist of Lovable AI Gateway models (`google/gemini-3-flash-preview`, `google/gemini-2.5-flash`, `google/gemini-2.5-pro`, `openai/gpt-5-mini`, `openai/gpt-5`).
-- Refactor `src/lib/ai-fallback.server.ts` → `ai.server.ts`:
-  - **Hard-pin**: only call the selected model; on 402/429/5xx, return a typed error to the client, do NOT fall back.
-  - Preserve current CONTENT_POLICY system-message injection.
-- New `getAiStatus` server fn that returns per-model availability: `{ hasKey, lastError, cooldownUntil }`. Cooldown lives in-memory (~10 min) after a 402/429.
-- New **AI Model** panel in `SettingsSuite`: dropdown (or radio list) of allowed models; each row shows a status badge (`READY`, `NO KEY`, `RATE LIMITED — retry in Xm`, `CREDITS EXHAUSTED`). Unavailable options are disabled.
-- Client polls `getAiStatus` every 60s while the Settings panel is open, and after any AI call that errors.
+Existing `Manager Rating Volatility` and `Morale Volatility` now cover only non-result drivers (standings/media/staff churn).
 
----
+New hook fired from `setResult`:
+```
+adjustManagerRespect({goalMargin, oppTeamRating, oppStandingsRank,
+                      streakBrokenOrExtended, mediaPressure})
+adjustMorale(sameInputsPerPlayer + team)
+```
+Magnitude = base * matchResultXxxVolatility. Formula outline (documented in `morale.ts`):
+`delta = sign(margin) * (|margin| * 0.6 + oppStrength * 0.4 + streakBonus) * volatility`
+where `oppStrength = normalize(rank_gap + rating_gap)` and `streakBonus = ±1` when a streak is broken/extended. So a top-of-table manager can still gain respect via lopsided wins over strong opponents.
 
-## Technical notes
+## 9. Auto SAVE VERSION at season end
 
-- All new state fields (`description`, `history`, `settings.newsFrequency`, `settings.aiModel`) are additive — existing saves keep working via defaults in the state loader.
-- `TeamRow` and Form/Streak helpers live in `src/lib/team-stats.ts` (pure functions over `state.results`).
-- News auto-gen hooks into existing mutators via a small event bus in `state/league.tsx` — no engine math changes (golden rule preserved).
-- Model selector is UI + server-fn wiring only; no engine coupling.
+In the playoffs-final resolver, after champion is set: enqueue `saveVersion({label: \`Season ${state.season} Final\`, auto: true})` before rolling into offseason. Archive list rendered in League History suite (same UI moved from Settings).
+
+## 10. Files touched
+
+**New**: `src/lib/day-schedule.ts` (quota/validator/Friday-picker), `src/lib/match-result-effects.ts`.
+**Edited**: `state/league.tsx`, `engine/engine.ts`, `data/rosters.ts` (BCO seed), `state/navigation.tsx`, `components/ScheduleSuite.tsx`, `components/MatchSchedulingSuite.tsx`, `components/FixtureBuilder.tsx`, `components/TeamEditorSuite.tsx`, `components/DraftSuite.tsx`, `components/SettingsSuite.tsx`, `components/TrophyRoomSuite.tsx` (→ rename export to LeagueHistorySuite), `components/PlayoffsSuite.tsx` (embed target), `components/NewsAutogenWatcher.tsx` (weekly roundup + day gates), `lib/press-brief.ts`, `lib/news-brief.ts`, `lib/negotiation-brief.ts`, `lib/press-conference.functions.ts`, `lib/trade-ai.functions.ts`, `lib/morale.ts`, `lib/engine-settings.ts`.
+
+## Out of scope (per user)
+
+Standings, Team Editor logic, Negotiation, Simulation Terminal, Messages, Contracts, Draft mechanics — no changes beyond the BCO field where required.
