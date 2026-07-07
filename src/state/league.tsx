@@ -1314,6 +1314,9 @@ function moveTrade(
   bPickIds: string[] = []
 ): LeagueState {
   if (aName === bName) return prev;
+  // Transfer window enforcement: blocks all trades if we're past the
+  // configured last week of the window (Settings suite).
+  if (!isTransferWindowOpen(prev)) return prev;
   const teamA = prev.teams[aName];
   const teamB = prev.teams[bName];
   if (!teamA || !teamB) return prev;
