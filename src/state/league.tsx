@@ -65,6 +65,9 @@ export interface LeaguePlayer {
   rating: number; FIN: number; SHO: number; PAS: number; VIS: number; DRI: number;
   PAC: number; STA: number; DEF: number; TAC: number; POS_attr: number; COM: number;
   WR: number; AGG: number; STR: number; AER: number;
+  // Ball Control — v8 engine attribute. Backfilled to `rating` on migration
+  // so old saves stay valid; the user tunes it manually in Team Editor / Draft.
+  BCO: number;
 }
 
 export interface LeagueTeamColors {
