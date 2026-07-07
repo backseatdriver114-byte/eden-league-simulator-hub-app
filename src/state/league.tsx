@@ -1695,13 +1695,39 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
         const { teams, protectedKeys } = applyMatchEffects(
           prev.teams, payload, payload?.injuries, prev.currentWeek
         );
-        const moraleTeams = fixture
+        let moraleTeams = fixture
           ? applyMatchMorale(teams, preStandings, fixture.home, fixture.away, homeGoals, awayGoals, payload)
           : teams;
+        let managers = withPendingSacks(prev.managers);
+        // NEW: match-result driven volatility. Independent of the standings /
+        // press-driven sliders — controlled by matchResultMoraleVolatility
+        // and matchResultManagerVolatility. Ensures a new manager on a top
+        // team can still gain respect from lopsided wins.
+        if (fixture) {
+          const deltas = computeMatchResultDeltas(prev, preStandings, fixture.home, fixture.away, homeGoals, awayGoals);
+          const moraleMult = prev.settings?.matchResultMoraleVolatility ?? 1.5;
+          const respectMult = prev.settings?.matchResultManagerVolatility ?? 1.5;
+          const applySide = (teamName: string, d: { respect: number; teamMorale: number; playerMorale: number }) => {
+            const t = moraleTeams[teamName]; if (!t) return;
+            const newTeamMorale = clampMorale(t.morale + d.teamMorale * moraleMult);
+            const newPlayers = t.players.map((p) => ({
+              ...p,
+              morale: clampMorale(p.morale + d.playerMorale * moraleMult),
+            }));
+            moraleTeams = { ...moraleTeams, [teamName]: { ...t, morale: newTeamMorale, players: newPlayers } };
+            const mgr = managers[teamName];
+            if (mgr && (mgr.personality ?? "").trim().toUpperCase() !== "USER CONTROLLED") {
+              const respect = clampRespect((typeof mgr.respect === "number" ? mgr.respect : 50) + d.respect * respectMult);
+              managers = { ...managers, [teamName]: { ...mgr, respect } };
+            }
+          };
+          applySide(fixture.home, deltas.home);
+          applySide(fixture.away, deltas.away);
+        }
         const next: LeagueState = {
           ...prev,
           teams: moraleTeams,
-          managers: withPendingSacks(prev.managers),
+          managers,
           results: { ...prev.results, [fixtureId]: { homeGoals, awayGoals, method } },
           payloads: payload ? { ...prev.payloads, [fixtureId]: payload } : prev.payloads,
         };
