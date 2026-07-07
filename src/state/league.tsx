@@ -1916,8 +1916,19 @@ export function LeagueProvider({ children }: { children: ReactNode }) {
           week: e.week,
           home: e.home,
           away: e.away,
+          day: e.day,
         }));
-        return advanceWeekIfComplete({ ...prev, fixtures: [...prev.fixtures, ...added] }, new Set());
+        const merged = [...prev.fixtures, ...added];
+        // Re-run day backfill so any newly added fixtures without explicit
+        // days get slotted into the week's 2/3/1/6 quota.
+        const preStandings = computeStandings({ ...prev, fixtures: merged, results: prev.results } as LeagueState);
+        const strength = (t: string) => {
+          const tt = prev.teams[t]; if (!tt) return 5;
+          const top = [...tt.players].sort((a,b)=>b.rating-a.rating).slice(0,9);
+          return top.length ? top.reduce((s,p)=>s+p.rating,0)/top.length : 5;
+        };
+        const fixtures = backfillDays(merged, preStandings, strength);
+        return advanceWeekIfComplete({ ...prev, fixtures }, new Set());
       }),
     removeFixture: (fixtureId) =>
       update((prev) => {
