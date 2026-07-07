@@ -711,6 +711,17 @@ function normalize(state: LeagueState): LeagueState {
   for (const name of state.teamOrder) {
     managers[name] = state.managers?.[name] ?? seededManagers[name];
   }
+  // Backfill day-of-week on every fixture (2 MON, 3 WED, 1 FRI, 6 SAT).
+  // The Friday slot is picked as the marquee via `pickMarqueeFixture` inside
+  // `backfillDays`. Fixtures that already carry a day are preserved.
+  const preStandings = computeStandingsRaw(state.fixtures, state.results, state.teamOrder);
+  const strengthOf = (t: string) => {
+    const tt = outTeams[t];
+    if (!tt) return 5;
+    const top = [...tt.players].sort((a, b) => b.rating - a.rating).slice(0, 9);
+    return top.length ? top.reduce((s, p) => s + p.rating, 0) / top.length : 5;
+  };
+  const fixturesWithDays = backfillDays(state.fixtures ?? [], preStandings, strengthOf);
   return {
     ...state,
     season: state.season ?? 1,
@@ -720,6 +731,7 @@ function normalize(state: LeagueState): LeagueState {
     undoStack: state.undoStack ?? [],
     redoStack: state.redoStack ?? [],
     teams: outTeams,
+    fixtures: fixturesWithDays,
     salaryCap,
     freeAgents: (state.freeAgents ?? []).map(normalizePlayer),
     contractsInitialized,
@@ -739,6 +751,34 @@ function normalize(state: LeagueState): LeagueState {
         }
       : undefined,
   };
+}
+
+// Slim standings computation used by the normalizer without needing a full
+// state object (avoids a circular init). Same tie-break rules as
+// computeStandings so the results align.
+function computeStandingsRaw(
+  fixtures: FixtureEntry[],
+  results: Record<string, MatchRecord>,
+  teamOrder: string[],
+): StandingRow[] {
+  const rows: Record<string, StandingRow> = {};
+  teamOrder.forEach((n) => {
+    rows[n] = { rank: 0, team: n, pld: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, gd: 0, pts: 0 };
+  });
+  for (const fx of fixtures) {
+    const r = results[fx.id]; if (!r) continue;
+    const h = rows[fx.home]; const a = rows[fx.away]; if (!h || !a) continue;
+    h.pld++; a.pld++; h.gf += r.homeGoals; h.ga += r.awayGoals;
+    a.gf += r.awayGoals; a.ga += r.homeGoals;
+    if (r.homeGoals > r.awayGoals) { h.w++; a.l++; h.pts += 3; }
+    else if (r.homeGoals < r.awayGoals) { a.w++; h.l++; a.pts += 3; }
+    else { h.d++; a.d++; h.pts++; a.pts++; }
+  }
+  const list = Object.values(rows);
+  list.forEach((row) => { row.gd = row.gf - row.ga; });
+  list.sort((x, y) => y.pts - x.pts || y.gd - x.gd || y.gf - x.gf || x.team.localeCompare(y.team));
+  list.forEach((row, i) => { row.rank = i + 1; });
+  return list;
 }
 
 function loadState(): LeagueState {
