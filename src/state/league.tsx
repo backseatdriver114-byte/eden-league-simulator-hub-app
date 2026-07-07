@@ -568,7 +568,7 @@ export function prospectPlayer(): LeaguePlayer {
     salary: 2.0, contractYears: 2,
     rating: 6.0, FIN: 6.0, SHO: 6.0, PAS: 6.0, VIS: 6.0, DRI: 6.0,
     PAC: 6.0, STA: 6.0, DEF: 6.0, TAC: 6.0, POS_attr: 6.0, COM: 6.0,
-    WR: 6.0, AGG: 6.0, STR: 6.0, AER: 6.0,
+    WR: 6.0, AGG: 6.0, STR: 6.0, AER: 6.0, BCO: 6.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
