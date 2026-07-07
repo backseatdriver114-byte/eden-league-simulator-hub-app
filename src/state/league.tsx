@@ -530,7 +530,7 @@ export function youthPlayer(): LeaguePlayer {
     salary: 1.0, contractYears: 1,
     rating: 1.0, FIN: 1.0, SHO: 1.0, PAS: 1.0, VIS: 1.0, DRI: 1.0,
     PAC: 1.0, STA: 1.0, DEF: 1.0, TAC: 1.0, POS_attr: 1.0, COM: 1.0,
-    WR: 1.0, AGG: 1.0, STR: 1.0, AER: 1.0,
+    WR: 1.0, AGG: 1.0, STR: 1.0, AER: 1.0, BCO: 1.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
