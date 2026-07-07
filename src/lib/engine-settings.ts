@@ -43,12 +43,16 @@ export interface EngineSettings {
   relationsBaseline: number;     // starting relationship value when no history exists (0-100)
   relationsVolatility: number;   // multiplier on every relationship swing
   pressInfluenceBaseline: number; // baseline multiplier on press / DM word-impact (1.0 = engine default)
-  managerRatingVolatility: number; // multiplier on respect drift each week (match results / standings / drift)
+  managerRatingVolatility: number; // multiplier on non-match respect drivers (standings drift, harshness extremes)
+  matchResultManagerVolatility: number; // DEDICATED multiplier applied to respect swings driven by individual match results
   pressConferenceVolatility: number; // SEPARATE multiplier applied to respectDelta from press conferences only
   standingsWeight: number; // extra weight applied to the standings pull in weekly respect drift (>=1 amplifies)
 
   // ---- Newsroom (auto-generated articles) ----
   newsFrequency: number; // 0..1 — probability an eligible event spawns an auto-generated article
+
+  // ---- Match-result morale volatility (separate from moraleVolatility) ----
+  matchResultMoraleVolatility: number; // multiplier on player/team morale swings caused by match results
 
   // ---- AI provider selection ----
   aiProvider: "auto" | "lovable" | "gemini" | "openrouter" | "groq" | "mistral"; // hard-pin choice; "auto" = fallback chain
