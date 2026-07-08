@@ -44,6 +44,8 @@ interface ProviderSpec {
   skipForStructured?: boolean;
 }
 
+// Fallback order (auto mode): Lovable → Gemini → Mistral → OpenRouter → Groq.
+// Groq (Llama) sits at the end because it is the weakest at strict JSON.
 const PROVIDERS: ProviderSpec[] = [
   {
     name: "lovable",
@@ -53,25 +55,17 @@ const PROVIDERS: ProviderSpec[] = [
     auth: (k) => ({ Authorization: `Bearer ${k}` }),
   },
   {
-    name: "groq",
-    envKey: "GROQ_API_KEY",
-    url: "https://api.groq.com/openai/v1/chat/completions",
-    model: "llama-3.3-70b-versatile",
+    name: "gemini",
+    envKey: "GEMINI_API_KEY",
+    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    model: "gemini-2.5-flash",
     auth: (k) => ({ Authorization: `Bearer ${k}` }),
-    skipForStructured: true,
   },
   {
     name: "mistral",
     envKey: "MISTRAL_API_KEY",
     url: "https://api.mistral.ai/v1/chat/completions",
     model: "mistral-small-latest",
-    auth: (k) => ({ Authorization: `Bearer ${k}` }),
-  },
-  {
-    name: "gemini",
-    envKey: "GEMINI_API_KEY",
-    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    model: "gemini-2.5-flash",
     auth: (k) => ({ Authorization: `Bearer ${k}` }),
   },
   {
@@ -85,7 +79,30 @@ const PROVIDERS: ProviderSpec[] = [
       "X-Title": "Eden League Data Hub",
     }),
   },
+  {
+    name: "groq",
+    envKey: "GROQ_API_KEY",
+    url: "https://api.groq.com/openai/v1/chat/completions",
+    model: "llama-3.3-70b-versatile",
+    auth: (k) => ({ Authorization: `Bearer ${k}` }),
+    skipForStructured: true,
+  },
 ];
+
+// Gemini supports three rotating API keys. For every gemini attempt we try
+// each configured key in order — if one is out of quota the next takes over
+// before the fallback chain moves on to Mistral.
+function keysForProvider(spec: ProviderSpec): string[] {
+  if (spec.name === "gemini") {
+    return [
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+    ].filter((k): k is string => typeof k === "string" && k.length > 0);
+  }
+  const single = process.env[spec.envKey];
+  return single ? [single] : [];
+}
 
 const PROVIDER_BY_NAME: Record<string, ProviderSpec> = Object.fromEntries(
   PROVIDERS.map((p) => [p.name, p]),
@@ -187,16 +204,24 @@ export async function chatCompletion(
   // ---- HARD-PIN branch: only try the chosen provider, do NOT fall back. ----
   if (pinned) {
     const spec = PROVIDER_BY_NAME[pinned];
-    const key = process.env[spec.envKey];
-    if (!key) throw new Error(`AI provider "${pinned}" has no API key configured.`);
-    const result = await callOne(spec, key, finalArgs);
-    if (result.ok) {
-      publishProvider(spec.name);
-      return { content: result.content, provider: spec.name };
+    const keys = keysForProvider(spec);
+    if (keys.length === 0) throw new Error(`AI provider "${pinned}" has no API key configured.`);
+    let lastDetail = "";
+    let lastStatus = 0;
+    for (const key of keys) {
+      const result = await callOne(spec, key, finalArgs);
+      if (result.ok) {
+        publishProvider(spec.name);
+        return { content: result.content, provider: spec.name };
+      }
+      lastDetail = result.detail;
+      lastStatus = result.status;
+      // Only rotate to the next key on credits / rate-limit / retryable errors.
+      if (!result.retryable) break;
     }
-    if (result.detail === "credits") throw new Error("CREDITS");
-    if (result.detail === "rate_limit") throw new Error("RATE_LIMIT");
-    throw new Error(`AI provider "${pinned}" failed — ${result.status}: ${result.detail}`);
+    if (lastDetail === "credits") throw new Error("CREDITS");
+    if (lastDetail === "rate_limit") throw new Error("RATE_LIMIT");
+    throw new Error(`AI provider "${pinned}" failed — ${lastStatus}: ${lastDetail}`);
   }
 
   // ---- AUTO branch: full fallback chain. ----
@@ -207,20 +232,22 @@ export async function chatCompletion(
   let rateHit = false;
 
   for (const spec of chain) {
-    const key = process.env[spec.envKey];
-    if (!key) { skipped.push(`${spec.name}: no key`); continue; }
-    const result = await callOne(spec, key, finalArgs);
-    if (result.ok) {
-      publishProvider(spec.name);
-      return { content: result.content, provider: spec.name };
+    const keys = keysForProvider(spec);
+    if (keys.length === 0) { skipped.push(`${spec.name}: no key`); continue; }
+    let advance = false;
+    for (const key of keys) {
+      const result = await callOne(spec, key, finalArgs);
+      if (result.ok) {
+        publishProvider(spec.name);
+        return { content: result.content, provider: spec.name };
+      }
+      if (result.detail === "credits") creditsHit = true;
+      if (result.detail === "rate_limit") rateHit = true;
+      skipped.push(`${spec.name}: ${result.status} ${result.detail}`);
+      if (!result.retryable) { advance = true; lastFatal = `${spec.name} ${result.status}: ${result.detail}`; break; }
+      // Otherwise loop to the next key for this provider (e.g. gemini rotation).
     }
-    if (result.detail === "credits") creditsHit = true;
-    if (result.detail === "rate_limit") rateHit = true;
-    skipped.push(`${spec.name}: ${result.status} ${result.detail}`);
-    if (!result.retryable) {
-      lastFatal = `${spec.name} ${result.status}: ${result.detail}`;
-      break;
-    }
+    if (advance) break;
   }
 
   if (creditsHit && !rateHit) throw new Error("CREDITS");

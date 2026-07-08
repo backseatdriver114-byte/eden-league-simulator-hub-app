@@ -39,7 +39,7 @@ const MAX_UNDO = 1000;
 
 export const ATTR_KEYS = [
   "rating", "FIN", "SHO", "PAS", "VIS", "DRI", "PAC", "STA",
-  "DEF", "TAC", "POS_attr", "COM", "WR", "AGG", "STR", "AER",
+  "DEF", "TAC", "POS_attr", "COM", "WR", "AGG", "STR", "AER", "BCO",
 ] as const;
 export type AttrKey = (typeof ATTR_KEYS)[number];
 
@@ -65,6 +65,7 @@ export interface LeaguePlayer {
   rating: number; FIN: number; SHO: number; PAS: number; VIS: number; DRI: number;
   PAC: number; STA: number; DEF: number; TAC: number; POS_attr: number; COM: number;
   WR: number; AGG: number; STR: number; AER: number;
+  BCO: number; // Ball Control — engine v8+ attribute; defaults to OVR
 }
 
 export interface LeagueTeamColors {
@@ -513,7 +514,7 @@ export function blankPlayer(): LeaguePlayer {
     salary: 5.0, contractYears: 2,
     rating: 5.0, FIN: 5.0, SHO: 5.0, PAS: 5.0, VIS: 5.0, DRI: 5.0,
     PAC: 5.0, STA: 5.0, DEF: 5.0, TAC: 5.0, POS_attr: 5.0, COM: 5.0,
-    WR: 5.0, AGG: 5.0, STR: 5.0, AER: 5.0,
+    WR: 5.0, AGG: 5.0, STR: 5.0, AER: 5.0, BCO: 5.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
@@ -527,7 +528,7 @@ export function youthPlayer(): LeaguePlayer {
     salary: 1.0, contractYears: 1,
     rating: 1.0, FIN: 1.0, SHO: 1.0, PAS: 1.0, VIS: 1.0, DRI: 1.0,
     PAC: 1.0, STA: 1.0, DEF: 1.0, TAC: 1.0, POS_attr: 1.0, COM: 1.0,
-    WR: 1.0, AGG: 1.0, STR: 1.0, AER: 1.0,
+    WR: 1.0, AGG: 1.0, STR: 1.0, AER: 1.0, BCO: 1.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
@@ -565,7 +566,7 @@ export function prospectPlayer(): LeaguePlayer {
     salary: 2.0, contractYears: 2,
     rating: 6.0, FIN: 6.0, SHO: 6.0, PAS: 6.0, VIS: 6.0, DRI: 6.0,
     PAC: 6.0, STA: 6.0, DEF: 6.0, TAC: 6.0, POS_attr: 6.0, COM: 6.0,
-    WR: 6.0, AGG: 6.0, STR: 6.0, AER: 6.0,
+    WR: 6.0, AGG: 6.0, STR: 6.0, AER: 6.0, BCO: 6.0,
   };
   return { ...base, rating: computeOverall(base) };
 }
@@ -601,7 +602,7 @@ export function initState(): LeagueState {
         contractYears: 0,
         rating: p.rating, FIN: p.FIN, SHO: p.SHO, PAS: p.PAS, VIS: p.VIS, DRI: p.DRI,
         PAC: p.PAC, STA: p.STA, DEF: p.DEF, TAC: p.TAC, POS_attr: p.POS_attr, COM: p.COM,
-        WR: p.WR, AGG: p.AGG, STR: p.STR, AER: p.AER,
+        WR: p.WR, AGG: p.AGG, STR: p.STR, AER: p.AER, BCO: p.rating,
       };
       const withAge = { ...player, age: computeStartingAge(player) };
       return { ...withAge, rating: computeOverall(withAge) };
@@ -652,6 +653,9 @@ function normalize(state: LeagueState): LeagueState {
       age: p.age ?? 25,
       salary: p.salary ?? calculateMarketValue(p.rating ?? 5),
       contractYears: p.contractYears ?? 0,
+      // v8 engine: BCO (Ball Control). Older saves default it to the player's OVR
+      // so ratings stay consistent until the user hand-edits them.
+      BCO: p.BCO ?? p.rating ?? 5,
     };
     // Guard age with > 0 (not truthiness) so a persisted age of 0 isn't re-rolled.
     const withAge = player.age != null && player.age > 0 ? player : { ...player, age: computeStartingAge(player) };
@@ -903,7 +907,7 @@ export function rosterForEngine(team: LeagueTeam) {
       name: p.name, position: p.position, rating: a.rating,
       FIN: a.FIN, SHO: a.SHO, PAS: a.PAS, VIS: a.VIS, DRI: a.DRI, PAC: a.PAC, STA: a.STA,
       DEF: a.DEF, TAC: a.TAC, POS_attr: a.POS_attr, COM: a.COM, WR: a.WR, AGG: a.AGG,
-      STR: a.STR, AER: a.AER,
+      STR: a.STR, AER: a.AER, BCO: a.BCO,
     };
   });
 }
@@ -1260,6 +1264,10 @@ function moveTrade(
   bPickIds: string[] = []
 ): LeagueState {
   if (aName === bName) return prev;
+  // Transfer window enforcement — the automatic AI desk, the manual builder,
+  // the draft-suite scanner, and the negotiation flow all funnel through here.
+  const lastWk = prev.settings?.transferWindowLastWeek ?? 12;
+  if ((prev.currentWeek ?? 1) > lastWk) return prev;
   const teamA = prev.teams[aName];
   const teamB = prev.teams[bName];
   if (!teamA || !teamB) return prev;

@@ -31,6 +31,7 @@ const NUM_COLS: { key: AttrKey; label: string }[] = [
   { key: "AGG", label: "AGG" },
   { key: "STR", label: "STR" },
   { key: "AER", label: "AER" },
+  { key: "BCO", label: "BCO" },
 ];
 
 // Base tactical identities the simulation engine scores against.

@@ -384,6 +384,13 @@ export function tradeBlockReason(
   const teamB = state.teams[bName];
   if (!teamA || !teamB) return "Unknown club selected.";
 
+  // ---- Transfer window: no deals may complete once the window has closed ----
+  const lastWk = state.settings?.transferWindowLastWeek ?? 12;
+  if ((state.currentWeek ?? 1) > lastWk) {
+    return `Transfer window closed — deals only complete through Week ${lastWk}. It reopens next season.`;
+  }
+
+
   // ---- Draft-pick ownership: a club can only trade picks it currently owns ----
   const picks = state.draftPicks ?? [];
   for (const id of aPickIds) {

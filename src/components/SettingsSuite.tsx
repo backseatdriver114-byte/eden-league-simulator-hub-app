@@ -239,7 +239,7 @@ function LeagueSettings({
 
           <div className="py-2">
             <div className="mb-1 flex items-center justify-between gap-3 text-sm">
-              <span className="text-muted-foreground">Morale volatility</span>
+              <span className="text-muted-foreground">Morale volatility (non-match)</span>
               <span className="font-mono font-bold text-primary">{s.moraleVolatility.toFixed(2)}×</span>
             </div>
             <Slider
@@ -250,11 +250,30 @@ function LeagueSettings({
               onValueChange={([v]) => setSettings({ moraleVolatility: Math.round(v * 100) / 100 })}
             />
             <p className="mt-1.5 text-[11px] text-muted-foreground">
-              Scales the size of every morale swing. <span className="font-semibold text-foreground">1.00×</span> is
-              the engine default. Lower it (e.g. 0.40×) to make squads far calmer so a beloved manager isn't
-              sacked over a short rough patch. Higher makes morale wilder.
+              Scales EVERYTHING except match results — offseason drift, trades, sackings, weekly bench/starter morale.
+              <span className="font-semibold text-foreground"> 1.00×</span> is the engine default.
             </p>
           </div>
+
+          <div className="py-2">
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Match Result Volatility (morale)</span>
+              <span className="font-mono font-bold text-primary">{(s.moraleMatchResultVolatility ?? 1).toFixed(2)}×</span>
+            </div>
+            <Slider
+              value={[s.moraleMatchResultVolatility ?? 1]}
+              min={0}
+              max={3}
+              step={0.05}
+              onValueChange={([v]) => setSettings({ moraleMatchResultVolatility: Math.round(v * 100) / 100 })}
+            />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Dedicated multiplier for team &amp; player morale swings caused by MATCH RESULTS only
+              (win/loss/draw, goals, assists, cards, injuries, clean sheets). Crank it up to make
+              every result matter more to the dressing room.
+            </p>
+          </div>
+
 
           <div className="flex flex-wrap items-center justify-between gap-2 py-2">
             <p className="text-[11px] text-muted-foreground">
@@ -323,11 +342,25 @@ function LeagueSettings({
           </div>
           <div className="py-2">
             <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Match Result Volatility (respect)</span>
+              <span className="font-mono font-bold text-primary">{(s.managerMatchResultVolatility ?? 1).toFixed(2)}×</span>
+            </div>
+            <Slider value={[s.managerMatchResultVolatility ?? 1]} min={0} max={5} step={0.1}
+              onValueChange={([v]) => setSettings({ managerMatchResultVolatility: Math.round(v * 100) / 100 })} />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Dedicated multiplier for respect swings caused by MATCH RESULTS only — margin of victory,
+              opponent quality, and streak momentum. Keeps standings drift (above) independent so a
+              team already top of the table can still gain/lose respect purely off results.
+            </p>
+          </div>
+          <div className="py-2">
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">Press conference volatility</span>
               <span className="font-mono font-bold text-primary">{(s.pressConferenceVolatility ?? 1).toFixed(2)}×</span>
             </div>
             <Slider value={[s.pressConferenceVolatility ?? 1]} min={0} max={5} step={0.1}
               onValueChange={([v]) => setSettings({ pressConferenceVolatility: Math.round(v * 100) / 100 })} />
+
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               Dedicated multiplier for respect movement caused by press-conference answers ONLY.
               Crank this up for high-drama interviews without changing weekly match drift.
@@ -439,7 +472,7 @@ function AiModelCard({ s, setSettings }: { s: EngineSettings; setSettings: (p: P
             <span className="rounded bg-success/20 px-2 py-0.5 text-[10px] font-bold uppercase text-success">Always ready</span>
           </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
-            Tries Lovable AI first; falls through to Groq, Mistral, Gemini, OpenRouter on failure.
+            Tries Lovable AI first; falls through to Gemini, Mistral, OpenRouter, Groq on failure. Gemini rotates through 3 API keys before moving on.
           </div>
         </button>
         {loading && providers.length === 0 && (

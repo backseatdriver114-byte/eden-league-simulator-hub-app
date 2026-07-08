@@ -24,6 +24,7 @@ const ATTR_COLS: { key: keyof LeaguePlayer; label: string }[] = [
   { key: "STA", label: "STA" }, { key: "DEF", label: "DEF" }, { key: "TAC", label: "TAC" },
   { key: "POS_attr", label: "POS" }, { key: "COM", label: "COM" }, { key: "WR", label: "WR" },
   { key: "AGG", label: "AGG" }, { key: "STR", label: "STR" }, { key: "AER", label: "AER" },
+  { key: "BCO", label: "BCO" },
 ];
 
 const POSITIONS = [

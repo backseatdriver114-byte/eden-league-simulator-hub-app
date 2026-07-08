@@ -20,12 +20,18 @@ export function providerCooldownRemaining(name: ProviderName): CooldownEntry | n
 }
 
 export function providerHasKey(name: ProviderName): boolean {
+  if (name === "gemini") {
+    return (
+      !!process.env.GEMINI_API_KEY ||
+      !!process.env.GEMINI_API_KEY_2 ||
+      !!process.env.GEMINI_API_KEY_3
+    );
+  }
   const envKey = ({
     lovable: "LOVABLE_API_KEY",
-    gemini: "GEMINI_API_KEY",
     openrouter: "OPENROUTER_API_KEY",
     groq: "GROQ_API_KEY",
     mistral: "MISTRAL_API_KEY",
-  } as const)[name];
+  } as const)[name as Exclude<ProviderName, "gemini">];
   return typeof process.env[envKey] === "string" && process.env[envKey]!.length > 0;
 }
