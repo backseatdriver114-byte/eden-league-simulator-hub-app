@@ -44,6 +44,8 @@ interface ProviderSpec {
   skipForStructured?: boolean;
 }
 
+// Fallback order (auto mode): Lovable → Gemini → Mistral → OpenRouter → Groq.
+// Groq (Llama) sits at the end because it is the weakest at strict JSON.
 const PROVIDERS: ProviderSpec[] = [
   {
     name: "lovable",
@@ -53,25 +55,17 @@ const PROVIDERS: ProviderSpec[] = [
     auth: (k) => ({ Authorization: `Bearer ${k}` }),
   },
   {
-    name: "groq",
-    envKey: "GROQ_API_KEY",
-    url: "https://api.groq.com/openai/v1/chat/completions",
-    model: "llama-3.3-70b-versatile",
+    name: "gemini",
+    envKey: "GEMINI_API_KEY",
+    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    model: "gemini-2.5-flash",
     auth: (k) => ({ Authorization: `Bearer ${k}` }),
-    skipForStructured: true,
   },
   {
     name: "mistral",
     envKey: "MISTRAL_API_KEY",
     url: "https://api.mistral.ai/v1/chat/completions",
     model: "mistral-small-latest",
-    auth: (k) => ({ Authorization: `Bearer ${k}` }),
-  },
-  {
-    name: "gemini",
-    envKey: "GEMINI_API_KEY",
-    url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-    model: "gemini-2.5-flash",
     auth: (k) => ({ Authorization: `Bearer ${k}` }),
   },
   {
@@ -85,7 +79,30 @@ const PROVIDERS: ProviderSpec[] = [
       "X-Title": "Eden League Data Hub",
     }),
   },
+  {
+    name: "groq",
+    envKey: "GROQ_API_KEY",
+    url: "https://api.groq.com/openai/v1/chat/completions",
+    model: "llama-3.3-70b-versatile",
+    auth: (k) => ({ Authorization: `Bearer ${k}` }),
+    skipForStructured: true,
+  },
 ];
+
+// Gemini supports three rotating API keys. For every gemini attempt we try
+// each configured key in order — if one is out of quota the next takes over
+// before the fallback chain moves on to Mistral.
+function keysForProvider(spec: ProviderSpec): string[] {
+  if (spec.name === "gemini") {
+    return [
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+    ].filter((k): k is string => typeof k === "string" && k.length > 0);
+  }
+  const single = process.env[spec.envKey];
+  return single ? [single] : [];
+}
 
 const PROVIDER_BY_NAME: Record<string, ProviderSpec> = Object.fromEntries(
   PROVIDERS.map((p) => [p.name, p]),

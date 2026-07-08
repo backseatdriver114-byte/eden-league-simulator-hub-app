@@ -37,13 +37,15 @@ export interface EngineSettings {
   sackThreshold: number;         // morale below this sacks the manager
   managerRenewalMorale: number;  // morale reset after a sacking
   seasonMoraleReset: number;     // points morale regresses toward baseline each season
-  moraleVolatility: number;      // multiplier on every morale swing (1.0 = engine default; lower = calmer)
+  moraleVolatility: number;      // multiplier on NON-match morale swings (offseason, trades, sackings, weekly bench/starter drift)
+  moraleMatchResultVolatility: number; // multiplier on morale swings caused by MATCH RESULTS only (win/loss/draw, goals, cards, injuries)
 
   // ---- Manager Relations / Press / Influence ----
   relationsBaseline: number;     // starting relationship value when no history exists (0-100)
   relationsVolatility: number;   // multiplier on every relationship swing
   pressInfluenceBaseline: number; // baseline multiplier on press / DM word-impact (1.0 = engine default)
-  managerRatingVolatility: number; // multiplier on respect drift each week (match results / standings / drift)
+  managerRatingVolatility: number; // multiplier on standings / drift / weekly noise only
+  managerMatchResultVolatility: number; // separate multiplier on per-MATCH manager respect swings (win/loss margin, opponent quality, streaks)
   pressConferenceVolatility: number; // SEPARATE multiplier applied to respectDelta from press conferences only
   standingsWeight: number; // extra weight applied to the standings pull in weekly respect drift (>=1 amplifies)
 
@@ -83,11 +85,13 @@ export const DEFAULT_SETTINGS: EngineSettings = {
   managerRenewalMorale: 60,
   seasonMoraleReset: 7,
   moraleVolatility: 1.0,
+  moraleMatchResultVolatility: 1.0,
 
   relationsBaseline: 50,
   relationsVolatility: 1.0,
   pressInfluenceBaseline: 1.0,
   managerRatingVolatility: 1.0,
+  managerMatchResultVolatility: 1.0,
   pressConferenceVolatility: 1.5,
   standingsWeight: 2.2,
 

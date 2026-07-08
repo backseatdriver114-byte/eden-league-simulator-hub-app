@@ -87,8 +87,27 @@ export function clampMorale(v: number): number {
 // applyRespectTick / applyManagerRespectDelta). Morale still scales match
 // simulation and is bumped back up by triggerManagerSack when a sacking does
 // land, but it is no longer the trigger itself.
+// Match-caused vs non-match events — controlled by DIFFERENT volatility knobs
+// so match results and everything else (offseason drift, trades, weekly bench
+// morale, sackings, contract events) can be tuned independently.
+const MATCH_TEAM_EVENTS = new Set<TeamEvent>([
+  "elite_victory", "standard_victory", "stalemate", "standard_defeat",
+  "upset_defeat", "locker_room_crisis",
+]);
+const MATCH_PLAYER_EVENTS = new Set<PlayerEvent>([
+  "goal", "assist", "clean_sheet", "red_card", "yellow_card", "injured",
+]);
+
+// Apply a team macro event in place. Morale no longer drives sackings — the
+// state layer dismisses managers based on manager RESPECT (see league.tsx
+// applyRespectTick / applyManagerRespectDelta). Morale still scales match
+// simulation and is bumped back up by triggerManagerSack when a sacking does
+// land, but it is no longer the trigger itself.
 export function applyTeamEvent(team: LeagueTeam, event: TeamEvent): boolean {
-  const swing = TEAM_EVENTS[event] * settings.moraleVolatility;
+  const mult = MATCH_TEAM_EVENTS.has(event)
+    ? settings.moraleMatchResultVolatility
+    : settings.moraleVolatility;
+  const swing = TEAM_EVENTS[event] * mult;
   team.morale = clampMorale((team.morale ?? settings.moraleBaseline) + swing);
   return false;
 }
@@ -119,7 +138,10 @@ export function applyPlayerEvent(
   event: PlayerEvent
 ): void {
   if (isManualSimTeam(team.name)) return;
-  const swing = PLAYER_EVENTS[event] * settings.moraleVolatility;
+  const mult = MATCH_PLAYER_EVENTS.has(event)
+    ? settings.moraleMatchResultVolatility
+    : settings.moraleVolatility;
+  const swing = PLAYER_EVENTS[event] * mult;
   player.morale = clampMorale((player.morale ?? settings.moraleBaseline) + swing);
 }
 
@@ -129,7 +151,7 @@ export function applyPlayerEvent(
 // positioning up when high, or degrades passing / tackling when low.
 const ATTRS: (keyof LeaguePlayer)[] = [
   "rating", "FIN", "SHO", "PAS", "VIS", "DRI", "PAC", "STA",
-  "DEF", "TAC", "POS_attr", "COM", "WR", "AGG", "STR", "AER",
+  "DEF", "TAC", "POS_attr", "COM", "WR", "AGG", "STR", "AER", "BCO",
 ];
 
 export function teamMoraleFactor(teamMorale: number): number {

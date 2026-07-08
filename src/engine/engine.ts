@@ -88,6 +88,7 @@ export interface EnginePlayer {
   FIN: number; SHO: number; PAS: number; VIS: number; DRI: number; PAC: number;
   STA: number; DEF: number; TAC: number; POS_attr: number; COM: number; WR: number;
   AGG: number; STR: number; AER: number;
+  BCO: number; // v8+ Ball Control — passed through; used by future engine upgrades
   fatigue: number;
   goals: number;
   assists: number;
