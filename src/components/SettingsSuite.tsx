@@ -342,11 +342,25 @@ function LeagueSettings({
           </div>
           <div className="py-2">
             <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+              <span className="text-muted-foreground">Match Result Volatility (respect)</span>
+              <span className="font-mono font-bold text-primary">{(s.managerMatchResultVolatility ?? 1).toFixed(2)}×</span>
+            </div>
+            <Slider value={[s.managerMatchResultVolatility ?? 1]} min={0} max={5} step={0.1}
+              onValueChange={([v]) => setSettings({ managerMatchResultVolatility: Math.round(v * 100) / 100 })} />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              Dedicated multiplier for respect swings caused by MATCH RESULTS only — margin of victory,
+              opponent quality, and streak momentum. Keeps standings drift (above) independent so a
+              team already top of the table can still gain/lose respect purely off results.
+            </p>
+          </div>
+          <div className="py-2">
+            <div className="mb-1 flex items-center justify-between gap-3 text-sm">
               <span className="text-muted-foreground">Press conference volatility</span>
               <span className="font-mono font-bold text-primary">{(s.pressConferenceVolatility ?? 1).toFixed(2)}×</span>
             </div>
             <Slider value={[s.pressConferenceVolatility ?? 1]} min={0} max={5} step={0.1}
               onValueChange={([v]) => setSettings({ pressConferenceVolatility: Math.round(v * 100) / 100 })} />
+
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               Dedicated multiplier for respect movement caused by press-conference answers ONLY.
               Crank this up for high-drama interviews without changing weekly match drift.
