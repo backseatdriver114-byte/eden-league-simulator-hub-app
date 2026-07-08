@@ -439,7 +439,7 @@ function AiModelCard({ s, setSettings }: { s: EngineSettings; setSettings: (p: P
             <span className="rounded bg-success/20 px-2 py-0.5 text-[10px] font-bold uppercase text-success">Always ready</span>
           </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">
-            Tries Lovable AI first; falls through to Groq, Mistral, Gemini, OpenRouter on failure.
+            Tries Lovable AI first; falls through to Gemini, Mistral, OpenRouter, Groq on failure. Gemini rotates through 3 API keys before moving on.
           </div>
         </button>
         {loading && providers.length === 0 && (
