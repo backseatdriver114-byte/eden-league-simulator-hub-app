@@ -204,16 +204,24 @@ export async function chatCompletion(
   // ---- HARD-PIN branch: only try the chosen provider, do NOT fall back. ----
   if (pinned) {
     const spec = PROVIDER_BY_NAME[pinned];
-    const key = process.env[spec.envKey];
-    if (!key) throw new Error(`AI provider "${pinned}" has no API key configured.`);
-    const result = await callOne(spec, key, finalArgs);
-    if (result.ok) {
-      publishProvider(spec.name);
-      return { content: result.content, provider: spec.name };
+    const keys = keysForProvider(spec);
+    if (keys.length === 0) throw new Error(`AI provider "${pinned}" has no API key configured.`);
+    let lastDetail = "";
+    let lastStatus = 0;
+    for (const key of keys) {
+      const result = await callOne(spec, key, finalArgs);
+      if (result.ok) {
+        publishProvider(spec.name);
+        return { content: result.content, provider: spec.name };
+      }
+      lastDetail = result.detail;
+      lastStatus = result.status;
+      // Only rotate to the next key on credits / rate-limit / retryable errors.
+      if (!result.retryable) break;
     }
-    if (result.detail === "credits") throw new Error("CREDITS");
-    if (result.detail === "rate_limit") throw new Error("RATE_LIMIT");
-    throw new Error(`AI provider "${pinned}" failed — ${result.status}: ${result.detail}`);
+    if (lastDetail === "credits") throw new Error("CREDITS");
+    if (lastDetail === "rate_limit") throw new Error("RATE_LIMIT");
+    throw new Error(`AI provider "${pinned}" failed — ${lastStatus}: ${lastDetail}`);
   }
 
   // ---- AUTO branch: full fallback chain. ----
@@ -224,20 +232,22 @@ export async function chatCompletion(
   let rateHit = false;
 
   for (const spec of chain) {
-    const key = process.env[spec.envKey];
-    if (!key) { skipped.push(`${spec.name}: no key`); continue; }
-    const result = await callOne(spec, key, finalArgs);
-    if (result.ok) {
-      publishProvider(spec.name);
-      return { content: result.content, provider: spec.name };
+    const keys = keysForProvider(spec);
+    if (keys.length === 0) { skipped.push(`${spec.name}: no key`); continue; }
+    let advance = false;
+    for (const key of keys) {
+      const result = await callOne(spec, key, finalArgs);
+      if (result.ok) {
+        publishProvider(spec.name);
+        return { content: result.content, provider: spec.name };
+      }
+      if (result.detail === "credits") creditsHit = true;
+      if (result.detail === "rate_limit") rateHit = true;
+      skipped.push(`${spec.name}: ${result.status} ${result.detail}`);
+      if (!result.retryable) { advance = true; lastFatal = `${spec.name} ${result.status}: ${result.detail}`; break; }
+      // Otherwise loop to the next key for this provider (e.g. gemini rotation).
     }
-    if (result.detail === "credits") creditsHit = true;
-    if (result.detail === "rate_limit") rateHit = true;
-    skipped.push(`${spec.name}: ${result.status} ${result.detail}`);
-    if (!result.retryable) {
-      lastFatal = `${spec.name} ${result.status}: ${result.detail}`;
-      break;
-    }
+    if (advance) break;
   }
 
   if (creditsHit && !rateHit) throw new Error("CREDITS");
